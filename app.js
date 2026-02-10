@@ -2733,10 +2733,32 @@ const handleCategoryListClick = async (event) => {
 const handleTabClick = (event) => {
   const button = event.target.closest(".tab");
   if (!button || button.disabled) return;
+  const sectionName = button.dataset.section;
+  if (sectionName) {
+    const section = button.closest(".nav-section");
+    if (section) {
+      document.querySelectorAll(".nav-section").forEach((item) => {
+        if (item !== section) item.classList.remove("is-open");
+      });
+      section.classList.toggle("is-open");
+    }
+  }
+  if (button.dataset.action === "alerts") {
+    openNotifications();
+    return;
+  }
   const target = button.dataset.tab;
+  if (!target) return;
   activateTab(target);
   if (target === "ai") {
     updateAiMeta();
+  }
+  const focusId = button.dataset.focus;
+  if (focusId) {
+    requestAnimationFrame(() => {
+      const targetEl = document.getElementById(focusId);
+      if (targetEl) targetEl.focus({ preventScroll: true });
+    });
   }
   requestAnimationFrame(refreshScrollLimits);
 };
