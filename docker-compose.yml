@@ -28,6 +28,8 @@ services:
       DB_PASSWORD: rupeewise
       DB_NAME: rupeewise
       DB_PORT: 3306
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL}
     ports:
       - "3000:3000"
     volumes:

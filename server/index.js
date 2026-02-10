@@ -52,6 +52,36 @@ const query = async (sql, params = []) => {
   return rows;
 };
 
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const AI_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const aiCache = new Map();
+
+const callGemini = async ({ apiKey, model, payload }) => {
+  const url = `${GEMINI_API_BASE}/${model}:generateContent`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Gemini API error");
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const getAiCacheKey = (userId, month) => `${userId}:${month}`;
+
 const DEFAULT_CATEGORIES = [
   { label: "Groceries", color: "#22c55e" },
   { label: "Transport", color: "#0ea5e9" },
@@ -979,6 +1009,165 @@ app.delete("/api/income/:id", async (req, res) => {
     req.user.userId,
   ]);
   res.json({ ok: true });
+});
+
+app.post("/api/ai/analysis", async (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(501).json({ error: "Gemini API key not configured." });
+  }
+
+  const month =
+    (req.body && req.body.month) || new Date().toISOString().slice(0, 7);
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const cacheKey = getAiCacheKey(req.user.userId, month);
+  const cached = aiCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json({
+      ...cached.payload,
+      cached: true,
+      cache_expires_at: cached.expiresAt,
+    });
+  }
+
+  try {
+    const userRows = await query("SELECT name FROM users WHERE id = ?", [
+      req.user.userId,
+    ]);
+    const userName = userRows[0]?.name || "User";
+
+    const budgetRows = await query(
+      "SELECT amount FROM budgets WHERE user_id = ? AND month = ?",
+      [req.user.userId, month]
+    );
+    const budget = Number(budgetRows[0]?.amount || 0);
+
+    const incomeRows = await query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM income_entries WHERE user_id = ? AND DATE_FORMAT(income_date, '%Y-%m') = ?",
+      [req.user.userId, month]
+    );
+    const incomeTotal = Number(incomeRows[0]?.total || 0);
+
+    const expenseRows = await query(
+      `SELECT e.amount, e.expense_date AS date, e.note,
+              c.label AS category, pm.type AS paymentType, pm.label AS paymentLabel
+       FROM expenses e
+       LEFT JOIN categories c ON e.category_id = c.id
+       LEFT JOIN payment_methods pm ON e.payment_method_id = pm.id
+       WHERE e.user_id = ? AND DATE_FORMAT(e.expense_date, '%Y-%m') = ?
+       ORDER BY e.expense_date DESC
+       LIMIT 200`,
+      [req.user.userId, month]
+    );
+
+    const spentTotal = expenseRows.reduce(
+      (sum, row) => sum + Number(row.amount || 0),
+      0
+    );
+
+    const expenses = expenseRows.map((row) => ({
+      date: row.date,
+      amount: Number(row.amount || 0),
+      category: row.category || "Unknown",
+      payment: row.paymentLabel
+        ? `${row.paymentType || "Payment"} - ${row.paymentLabel}`
+        : row.paymentType || "Unknown",
+      note: row.note || "",
+    }));
+
+    const prompt = `You are a personal finance coach for India. Analyze the user's monthly spending and return concise, actionable guidance.
+
+User name: ${userName}
+Month: ${month}
+Monthly budget (INR): ${budget}
+Total income (INR): ${incomeTotal}
+Total spent (INR): ${spentTotal}
+Expenses list (JSON array of {date, amount, category, payment, note}):
+${JSON.stringify(expenses)}
+
+Return JSON that matches the provided schema. Keep each list item under 100 characters. Provide at most 5 suggestions. Include a one-line reason for the score, a clear budget health status, and a short next-month forecast. Only recommend credit cards if it clearly fits the user's spending. Provide 0 to 3 credit card suggestions tailored to spending patterns (e.g., cashback on groceries/fuel/UPI, travel, premium). If no credit card is needed, return an empty list. Each suggestion should include card name + 1 short reason.`;
+
+    const payload = {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 512,
+        responseMimeType: "application/json",
+        responseJsonSchema: {
+          type: "object",
+          properties: {
+            spending_score: { type: "integer", minimum: 0, maximum: 100 },
+            score_reason: { type: "string" },
+            budget_health_status: { type: "string" },
+            detailed_analysis: { type: "string" },
+            money_leaks: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 5,
+            },
+            suggestions: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 5,
+            },
+            credit_card_suggestions: {
+              type: "array",
+              items: { type: "string" },
+              minItems: 0,
+              maxItems: 3,
+            },
+            next_month_forecast: { type: "string" },
+          },
+          required: [
+            "spending_score",
+            "score_reason",
+            "budget_health_status",
+            "detailed_analysis",
+            "money_leaks",
+            "suggestions",
+            "credit_card_suggestions",
+            "next_month_forecast",
+          ],
+        },
+      },
+    };
+
+    const geminiResponse = await callGemini({ apiKey, model, payload });
+    const text = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    let analysis;
+    try {
+      analysis = JSON.parse(text);
+    } catch (error) {
+      return res.status(502).json({ error: "Unable to parse Gemini response." });
+    }
+
+    const responsePayload = {
+      month,
+      meta: {
+        budget,
+        incomeTotal,
+        spentTotal,
+      },
+      analysis,
+    };
+    aiCache.set(cacheKey, {
+      expiresAt: Date.now() + AI_CACHE_TTL_MS,
+      payload: responsePayload,
+    });
+    res.json({
+      ...responsePayload,
+      cached: false,
+      cache_expires_at: Date.now() + AI_CACHE_TTL_MS,
+    });
+  } catch (error) {
+    console.error("AI analysis failed", error);
+    res.status(500).json({ error: "AI analysis failed" });
+  }
 });
 
 app.delete("/api/reset", async (req, res) => {
