@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register · RupeeWise</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="auth-page">
+      <form id="register-form" class="auth-form auth-standalone" novalidate>
+        <div class="auth-brand">
+          <div class="brand">RupeeWise</div>
+          <p class="hint">Create your account in seconds.</p>
+        </div>
+        <h3>Create account</h3>
+        <div id="auth-message" class="auth-message hidden" role="status" aria-live="polite"></div>
+        <div class="auth-field">
+          <label for="register-name">Full name</label>
+          <input
+            id="register-name"
+            class="auth-input"
+            type="text"
+            placeholder="Your name"
+            autocomplete="name"
+            required
+          />
+        </div>
+        <div class="auth-field">
+          <label for="register-email">Email</label>
+          <input
+            id="register-email"
+            class="auth-input"
+            type="email"
+            placeholder="you@example.com"
+            autocomplete="email"
+            required
+          />
+        </div>
+        <div class="auth-field">
+          <label for="register-password">Password</label>
+          <input
+            id="register-password"
+            class="auth-input"
+            type="password"
+            placeholder="Create a password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <div class="auth-field">
+          <label for="register-confirm">Confirm password</label>
+          <input
+            id="register-confirm"
+            class="auth-input"
+            type="password"
+            placeholder="Re-enter password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <label class="show-password">
+          <span class="checkbox-wrap">
+            <input
+              class="show-password-toggle"
+              type="checkbox"
+              data-target="register-password,register-confirm"
+              aria-controls="register-password register-confirm"
+              aria-label="Show password"
+            />
+            <span class="checkbox-box" aria-hidden="true"></span>
+          </span>
+          <span class="show-password-text">Show password</span>
+        </label>
+        <div class="password-meter">
+          <span class="meter-bar" id="password-meter"></span>
+          <span class="meter-label" id="password-meter-label">Use 12+ characters</span>
+        </div>
+        <button class="primary auth-submit" type="submit">Register</button>
+        <p class="hint small">Long passphrases are encouraged. No special character rules.</p>
+        <p class="auth-footer">
+          Already have an account?
+          <a class="auth-link" href="login.html">Sign in</a>
+        </p>
+      </form>
+    </main>
+
+    <script src="auth.js"></script>
+  </body>
+</html>

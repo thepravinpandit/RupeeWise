@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login · RupeeWise</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="auth-page">
+      <form id="login-form" class="auth-form auth-standalone" novalidate>
+        <div class="auth-brand">
+          <div class="brand">RupeeWise</div>
+          <p class="hint">Welcome back. Let’s continue tracking.</p>
+        </div>
+        <h3>Login</h3>
+        <div id="auth-message" class="auth-message hidden" role="status" aria-live="polite"></div>
+        <div class="auth-field">
+          <label for="login-email">Email</label>
+          <input
+            id="login-email"
+            class="auth-input"
+            type="email"
+            placeholder="you@example.com"
+            autocomplete="email"
+            required
+          />
+        </div>
+        <div class="auth-field">
+          <label for="login-password">Password</label>
+          <input
+            id="login-password"
+            class="auth-input"
+            type="password"
+            placeholder="Enter your password"
+            autocomplete="current-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <label class="show-password">
+          <span class="checkbox-wrap">
+            <input
+              class="show-password-toggle"
+              type="checkbox"
+              data-target="login-password"
+              aria-controls="login-password"
+              aria-label="Show password"
+            />
+            <span class="checkbox-box" aria-hidden="true"></span>
+          </span>
+          <span class="show-password-text">Show password</span>
+        </label>
+        <button class="primary auth-submit" type="submit">Sign in</button>
+        <p class="auth-footer">
+          Don’t have an account?
+          <a class="auth-link" href="register.html">Create one</a>
+        </p>
+      </form>
+    </main>
+
+    <script src="auth.js"></script>
+  </body>
+</html>
