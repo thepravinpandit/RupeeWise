@@ -113,6 +113,14 @@
           </span>
           Insights
         </button>
+        <button class="tab" data-tab="ai">
+          <span class="tab-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" stroke-width="1.7">
+              <path d="M12 3l2.4 4.8L20 9l-4.6 4.5 1.1 6.2L12 17l-4.5 2.7 1.1-6.2L4 9l5.6-1.2L12 3z" />
+            </svg>
+          </span>
+          AI Analysis
+        </button>
         <button class="tab" data-tab="profile">
           <span class="tab-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" stroke-width="1.7">
@@ -168,8 +176,8 @@
                 <strong id="largest-expense">₹0</strong>
               </div>
               <div class="stat">
-                <span>Remaining income</span>
-                <strong id="remaining-income">₹0</strong>
+                <span>Remaining monthly budget</span>
+                <strong id="remaining-budget">—</strong>
               </div>
             </div>
           </section>
@@ -266,6 +274,85 @@
               </div>
               <div class="line-chart" id="insight-line" role="img" aria-label="Monthly trend"></div>
             </section>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel" data-panel="ai">
+        <section class="panel card ai-panel">
+          <div class="panel-header">
+            <div>
+              <h2>AI Analysis</h2>
+              <span class="hint">Gemini turns your spending into a health score and action plan.</span>
+            </div>
+            <div class="ai-controls">
+              <div class="ai-field">
+                <label for="ai-month">Month</label>
+                <input id="ai-month" type="month" />
+              </div>
+              <button class="primary" type="button" id="ai-generate">Generate</button>
+            </div>
+          </div>
+          <div class="ai-status hint" id="ai-status">
+            Connect Gemini in your server `.env` to generate insights.
+          </div>
+          <div class="ai-cache hint" id="ai-cache">
+            You can refresh AI analysis in —
+          </div>
+          <div class="ai-grid">
+            <div class="ai-card ai-score-card">
+              <div class="ai-score-header">
+                <div>
+                  <span class="hint">Spending health score</span>
+                  <div class="ai-score-number">
+                    <strong id="ai-score">—</strong>
+                    <span>/100</span>
+                  </div>
+                </div>
+                <div class="ai-score-badge" id="ai-budget-health">At risk</div>
+              </div>
+              <div class="score-meter" aria-hidden="true">
+                <div class="score-bar" id="ai-score-bar"></div>
+              </div>
+              <p class="ai-reason" id="ai-score-reason">Run an analysis to see why this score.</p>
+              <p class="hint" id="ai-summary">Detailed analysis will appear here.</p>
+              <div class="ai-meta-grid">
+                <div>
+                  <span>Budget</span>
+                  <strong id="ai-budget">₹0</strong>
+                </div>
+                <div>
+                  <span>Total income</span>
+                  <strong id="ai-income">₹0</strong>
+                </div>
+                <div>
+                  <span>Total spent</span>
+                  <strong id="ai-spent">₹0</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="ai-card">
+              <h3>Where money is leaking</h3>
+              <ul class="ai-list" id="ai-leaks"></ul>
+            </div>
+
+            <div class="ai-card">
+              <h3>Actionable suggestions</h3>
+              <ul class="ai-list" id="ai-suggestions"></ul>
+            </div>
+
+            <div class="ai-card">
+              <h3>Credit card suggestion</h3>
+              <ul class="ai-list" id="ai-credit-suggestion">
+                <li class="hint">Generate an analysis to see the card picks.</li>
+              </ul>
+            </div>
+
+            <div class="ai-card">
+              <h3>Next month forecast</h3>
+              <p class="ai-forecast" id="ai-forecast">Generate an analysis to see the forecast.</p>
+            </div>
           </div>
         </section>
       </section>
@@ -555,9 +642,19 @@
               <input id="income-note" type="text" placeholder="Optional note" />
               <button class="primary" type="submit">Add income</button>
             </form>
-            <div class="insight-card">
-              <span class="label">Total income</span>
-              <strong id="income-total">₹0</strong>
+            <div class="income-summary">
+              <div class="insight-card">
+                <span class="label">Total income</span>
+                <strong id="income-total">₹0</strong>
+              </div>
+              <div class="insight-card">
+                <span class="label">Remaining income</span>
+                <strong id="income-remaining">₹0</strong>
+              </div>
+              <div class="insight-card">
+                <span class="label">Saving income</span>
+                <strong id="income-savings">₹0</strong>
+              </div>
             </div>
             <div id="income-list" class="expense-list scroll-list"></div>
           </section>
