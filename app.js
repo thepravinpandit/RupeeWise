@@ -36,7 +36,7 @@ const elements = {
   totalSpent: document.querySelector("#total-spent"),
   avgSpent: document.querySelector("#avg-spent"),
   largestExpense: document.querySelector("#largest-expense"),
-  remainingIncome: document.querySelector("#remaining-income"),
+  remainingBudget: document.querySelector("#remaining-budget"),
   snapshotRange: document.querySelector("#snapshot-range"),
   budgetMonth: document.querySelector("#budget-month"),
   budgetInput: document.querySelector("#budget-input"),
@@ -95,6 +95,22 @@ const elements = {
   insightWeekLabel: document.querySelector("#insight-week-label"),
   insightMonthLabel: document.querySelector("#insight-month-label"),
   insightYearLabel: document.querySelector("#insight-year-label"),
+  aiMonth: document.querySelector("#ai-month"),
+  aiGenerate: document.querySelector("#ai-generate"),
+  aiStatus: document.querySelector("#ai-status"),
+  aiCache: document.querySelector("#ai-cache"),
+  aiScore: document.querySelector("#ai-score"),
+  aiScoreBar: document.querySelector("#ai-score-bar"),
+  aiScoreReason: document.querySelector("#ai-score-reason"),
+  aiBudgetHealth: document.querySelector("#ai-budget-health"),
+  aiSummary: document.querySelector("#ai-summary"),
+  aiLeaks: document.querySelector("#ai-leaks"),
+  aiSuggestions: document.querySelector("#ai-suggestions"),
+  aiCreditSuggestion: document.querySelector("#ai-credit-suggestion"),
+  aiForecast: document.querySelector("#ai-forecast"),
+  aiBudget: document.querySelector("#ai-budget"),
+  aiIncome: document.querySelector("#ai-income"),
+  aiSpent: document.querySelector("#ai-spent"),
   categoryBudgetForm: document.querySelector("#category-budget-form"),
   categoryBudgetCategory: document.querySelector("#category-budget-category"),
   categoryBudgetPeriod: document.querySelector("#category-budget-period"),
@@ -122,6 +138,8 @@ const elements = {
   incomeList: document.querySelector("#income-list"),
   incomeMonthFilter: document.querySelector("#income-month-filter"),
   incomeTotal: document.querySelector("#income-total"),
+  incomeRemaining: document.querySelector("#income-remaining"),
+  incomeSavings: document.querySelector("#income-savings"),
   loginForm: document.querySelector("#login-form"),
   loginEmail: document.querySelector("#login-email"),
   loginPassword: document.querySelector("#login-password"),
@@ -183,6 +201,7 @@ let state = {
   expenses: [],
   allExpenses: [],
   budget: 0,
+  incomeBudget: 0,
   categoryBudgets: [],
   budgetHistory: [],
   recurringExpenses: [],
@@ -320,6 +339,13 @@ const setFormLoading = (form, isLoading, label = "Submitting...") => {
   button.textContent = isLoading ? label : button.dataset.originalText;
 };
 
+const setButtonLoading = (button, isLoading, label = "Loading...") => {
+  if (!button) return;
+  button.disabled = isLoading;
+  button.dataset.originalText = button.dataset.originalText || button.textContent;
+  button.textContent = isLoading ? label : button.dataset.originalText;
+};
+
 const updatePasswordMeter = () => {
   if (!elements.passwordMeter || !elements.passwordMeterLabel || !elements.registerPassword) return;
   const value = elements.registerPassword.value || "";
@@ -349,6 +375,59 @@ const showToast = (message, tone = "info") => {
   showToast.timer = setTimeout(() => {
     toast.classList.remove("show");
   }, 3200);
+};
+
+const setAiStatus = (message, tone = "") => {
+  if (!elements.aiStatus) return;
+  elements.aiStatus.textContent = message;
+  elements.aiStatus.classList.remove("error", "success");
+  if (tone) elements.aiStatus.classList.add(tone);
+};
+
+const renderAiList = (container, items, fallback) => {
+  if (!container) return;
+  container.innerHTML = "";
+  if (!items || !items.length) {
+    const li = document.createElement("li");
+    li.className = "hint";
+    li.textContent = fallback;
+    container.appendChild(li);
+    return;
+  }
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    container.appendChild(li);
+  });
+};
+
+const setAiScore = (score) => {
+  if (!elements.aiScore || !elements.aiScoreBar) return;
+  const value = Number(score);
+  if (!Number.isFinite(value)) {
+    elements.aiScore.textContent = "—";
+    elements.aiScoreBar.style.width = "0%";
+    elements.aiScoreBar.classList.remove("good", "ok", "low");
+    return;
+  }
+  const clamped = Math.max(0, Math.min(100, value));
+  elements.aiScore.textContent = Math.round(clamped).toString();
+  elements.aiScoreBar.style.width = `${clamped}%`;
+  elements.aiScoreBar.classList.remove("good", "ok", "low");
+  if (clamped >= 80) elements.aiScoreBar.classList.add("good");
+  else if (clamped >= 60) elements.aiScoreBar.classList.add("ok");
+  else elements.aiScoreBar.classList.add("low");
+};
+
+const formatRemainingTime = (ms) => {
+  if (!Number.isFinite(ms) || ms <= 0) return "now";
+  const totalSeconds = Math.ceil(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours <= 0 && minutes <= 0) return "now";
+  if (hours <= 0) return `${minutes}m`;
+  if (minutes <= 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
 };
 
 const activateTab = (tabName) => {
@@ -683,35 +762,31 @@ const updateSnapshot = async (filtered) => {
   const monthExpenses = baseExpenses.filter((expense) =>
     normalizeDateValue(expense.date).startsWith(monthValue)
   );
-  const total = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const totalAll = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   const [year, month] = monthValue.split("-").map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
-  const avg = total / daysInMonth;
+  const avg = totalAll / daysInMonth;
   const largest = monthExpenses.reduce((max, expense) => Math.max(max, expense.amount), 0);
 
-  elements.totalSpent.textContent = formatCurrency(total);
+  elements.totalSpent.textContent = formatCurrency(totalAll);
   elements.avgSpent.textContent = formatCurrency(avg);
   elements.largestExpense.textContent = formatCurrency(largest);
 
-  if (elements.remainingIncome) {
-    try {
-      const incomeTotal = await getIncomeTotalForMonth(monthValue);
-      const nonCreditTotal = monthExpenses.reduce((sum, expense) => {
-        const method = getPaymentById(expense.paymentMethodId);
-        if (isCreditCard(method)) return sum;
-        return sum + expense.amount;
-      }, 0);
-      const remaining = incomeTotal - nonCreditTotal;
-      elements.remainingIncome.textContent = formatCurrency(remaining);
-      elements.remainingIncome.classList.toggle("negative", remaining < 0);
-      elements.remainingIncome.classList.toggle("positive", remaining >= 0);
-    } catch (error) {
-      elements.remainingIncome.textContent = "—";
+  if (elements.remainingBudget) {
+    const budgetValue = Number(state.budget || 0);
+    if (!budgetValue) {
+      elements.remainingBudget.textContent = "—";
+      elements.remainingBudget.classList.remove("negative", "positive");
+    } else {
+      const remaining = budgetValue - totalAll;
+      elements.remainingBudget.textContent = formatCurrency(remaining);
+      elements.remainingBudget.classList.toggle("negative", remaining < 0);
+      elements.remainingBudget.classList.toggle("positive", remaining >= 0);
     }
   }
 
-  updateBudget(total);
+  updateBudget(totalAll);
   updateInsights(filtered);
 };
 
@@ -876,6 +951,34 @@ const renderInsights = () => {
   renderInsightFeed();
   renderInsightPie(expenses, now);
   renderInsightLine(expenses, now);
+};
+
+const updateAiMeta = async () => {
+  if (!elements.aiMonth) return;
+  const month = elements.aiMonth.value || defaultMonth;
+  if (elements.aiCache) {
+    elements.aiCache.textContent = "You can refresh AI analysis in —";
+  }
+  let budget = 0;
+  let incomeTotal = 0;
+  try {
+    const data = await fetchJSON(`${API_BASE}/budget?month=${month}`);
+    budget = Number(data.amount || 0);
+  } catch (error) {
+    budget = 0;
+  }
+  try {
+    incomeTotal = await getIncomeTotalForMonth(month);
+  } catch (error) {
+    incomeTotal = 0;
+  }
+  const spentTotal = (state.allExpenses || [])
+    .filter((expense) => normalizeDateValue(expense.date).startsWith(month))
+    .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+
+  if (elements.aiBudget) elements.aiBudget.textContent = formatCurrency(budget);
+  if (elements.aiIncome) elements.aiIncome.textContent = formatCurrency(incomeTotal);
+  if (elements.aiSpent) elements.aiSpent.textContent = formatCurrency(spentTotal);
 };
 
 const renderInsightPie = (expenses, now) => {
@@ -1652,6 +1755,25 @@ const renderIncomeEntries = () => {
   elements.incomeList.innerHTML = "";
   const total = state.incomeEntries.reduce((sum, item) => sum + Number(item.amount), 0);
   if (elements.incomeTotal) elements.incomeTotal.textContent = formatCurrency(total);
+  if (elements.incomeRemaining || elements.incomeSavings) {
+    const month = elements.incomeMonthFilter?.value || defaultMonth;
+    const spentTotal = (state.allExpenses || [])
+      .filter((expense) => normalizeDateValue(expense.date).startsWith(month))
+      .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+    const remaining = total - spentTotal;
+    const savingsBase = state.incomeBudget > 0 ? state.incomeBudget : spentTotal;
+    const savings = total - savingsBase;
+    if (elements.incomeRemaining) {
+      elements.incomeRemaining.textContent = formatCurrency(remaining);
+      elements.incomeRemaining.classList.toggle("negative", remaining < 0);
+      elements.incomeRemaining.classList.toggle("positive", remaining >= 0);
+    }
+    if (elements.incomeSavings) {
+      elements.incomeSavings.textContent = formatCurrency(savings);
+      elements.incomeSavings.classList.toggle("negative", savings < 0);
+      elements.incomeSavings.classList.toggle("positive", savings >= 0);
+    }
+  }
 
   if (!state.incomeEntries.length) {
     elements.incomeList.innerHTML = '<p class="hint">No income entries for this month.</p>';
@@ -1885,7 +2007,10 @@ const loadIncomeSources = async () => {
 
 const loadIncomeEntries = async () => {
   const month = elements.incomeMonthFilter?.value || defaultMonth;
-  const data = await fetchJSON(`${API_BASE}/income?month=${month}`);
+  const [data, budgetData] = await Promise.all([
+    fetchJSON(`${API_BASE}/income?month=${month}`),
+    fetchJSON(`${API_BASE}/budget?month=${month}`),
+  ]);
   state.incomeEntries = (data.items || []).map((item) => ({
     ...item,
     id: Number(item.id),
@@ -1893,6 +2018,7 @@ const loadIncomeEntries = async () => {
     sourceId: Number(item.sourceId),
     date: normalizeDateValue(item.date),
   }));
+  state.incomeBudget = Number(budgetData.amount) || 0;
   renderIncomeEntries();
 };
 
@@ -1947,6 +2073,9 @@ const refreshAll = async () => {
   await refreshExpenses();
   await Promise.all([loadBudgetHistory(), loadIncomeEntries()]);
   resetForm();
+  if (elements.aiMonth) {
+    updateAiMeta();
+  }
 };
 
 const uploadReceipt = async (expenseId) => {
@@ -2606,6 +2735,9 @@ const handleTabClick = (event) => {
   if (!button || button.disabled) return;
   const target = button.dataset.tab;
   activateTab(target);
+  if (target === "ai") {
+    updateAiMeta();
+  }
   requestAnimationFrame(refreshScrollLimits);
 };
 
@@ -2614,6 +2746,85 @@ const handleFiltersChange = async () => {
   syncBudgetMonth();
   await loadBudget();
   await loadExpenses();
+};
+
+const handleAiGenerate = async () => {
+  if (!state.user || !elements.aiGenerate) return;
+  const month = elements.aiMonth?.value || defaultMonth;
+  setButtonLoading(elements.aiGenerate, true, "Analyzing...");
+  setAiStatus("Analyzing your month with Gemini...", "");
+  try {
+    const data = await fetchJSON(`${API_BASE}/ai/analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month }),
+    });
+
+    const analysis = data.analysis || {};
+    const leakItems = Array.isArray(analysis.money_leaks)
+      ? analysis.money_leaks
+      : Array.isArray(analysis.spending_avoid)
+        ? analysis.spending_avoid
+        : [];
+    const suggestionItems = Array.isArray(analysis.suggestions) ? analysis.suggestions : [];
+    const meta = data.meta || {};
+    setAiScore(analysis.spending_score);
+    if (elements.aiScoreReason)
+      elements.aiScoreReason.textContent =
+        analysis.score_reason || "Score reason will appear here.";
+    if (elements.aiSummary)
+      elements.aiSummary.textContent =
+        analysis.detailed_analysis ||
+        analysis.summary ||
+        "Analysis generated. Review the tips below.";
+    if (elements.aiBudgetHealth) {
+      const statusRaw = String(analysis.budget_health_status || "").toLowerCase();
+      const normalized = statusRaw.replace(/[^a-z]/g, "");
+      const status =
+        normalized === "over" ? "over" : normalized === "under" ? "under" : "risk";
+      elements.aiBudgetHealth.textContent =
+        status === "over" ? "Over budget" : status === "under" ? "Under budget" : "At risk";
+      elements.aiBudgetHealth.classList.remove("over", "under", "risk");
+      elements.aiBudgetHealth.classList.add(status);
+    }
+    renderAiList(elements.aiLeaks, leakItems, "No leaks detected yet.");
+    renderAiList(elements.aiSuggestions, suggestionItems, "No suggestions yet.");
+    if (elements.aiCreditSuggestion) {
+      const creditItems = Array.isArray(analysis.credit_card_suggestions)
+        ? analysis.credit_card_suggestions
+        : [];
+      renderAiList(
+        elements.aiCreditSuggestion,
+        creditItems,
+        "No credit card recommendation needed this month."
+      );
+    }
+    if (elements.aiForecast) {
+      elements.aiForecast.textContent =
+        analysis.next_month_forecast || "No forecast available yet.";
+    }
+    if (elements.aiBudget) elements.aiBudget.textContent = formatCurrency(meta.budget || 0);
+    if (elements.aiIncome) elements.aiIncome.textContent = formatCurrency(meta.incomeTotal || 0);
+    if (elements.aiSpent) elements.aiSpent.textContent = formatCurrency(meta.spentTotal || 0);
+    if (elements.aiCache) {
+      const expiresAt = Number(data.cache_expires_at || 0);
+      const remaining = expiresAt ? expiresAt - Date.now() : 0;
+      elements.aiCache.textContent = `You can refresh AI analysis in ${formatRemainingTime(
+        remaining
+      )}.`;
+    }
+    setAiStatus(`Analysis ready for ${getMonthLabel(month)}.`, "success");
+  } catch (error) {
+    if (error.status === 501) {
+      setAiStatus("Add GEMINI_API_KEY in your server .env to enable analysis.", "error");
+    } else if (error.isNetwork) {
+      setAiStatus("Unable to reach the server. Please try again.", "error");
+    } else {
+      setAiStatus(error.message || "Unable to run analysis right now.", "error");
+    }
+  } finally {
+    setButtonLoading(elements.aiGenerate, false);
+  }
 };
 
 const handleLogin = async (event) => {
@@ -2828,6 +3039,7 @@ const init = async () => {
   elements.monthFilter.value = defaultMonth;
   elements.date.value = today.toISOString().slice(0, 10);
   if (elements.budgetMonth) elements.budgetMonth.value = defaultMonth;
+  if (elements.aiMonth) elements.aiMonth.value = defaultMonth;
   if (elements.incomeMonthFilter) elements.incomeMonthFilter.value = defaultMonth;
   if (elements.incomeDate) elements.incomeDate.value = today.toISOString().slice(0, 10);
 
@@ -2976,6 +3188,9 @@ if (elements.insightRangeButtons.length) {
 }
 
 elements.tabs.forEach((tab) => tab.addEventListener("click", handleTabClick));
+
+if (elements.aiGenerate) elements.aiGenerate.addEventListener("click", handleAiGenerate);
+if (elements.aiMonth) elements.aiMonth.addEventListener("input", updateAiMeta);
 
 [elements.monthFilter, elements.categoryFilter, elements.searchFilter, elements.sortFilter].forEach(
   (input) => input.addEventListener("input", handleFiltersChange)
