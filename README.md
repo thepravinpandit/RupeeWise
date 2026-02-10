@@ -22,6 +22,7 @@ A comprehensive expense tracking web application designed specifically for India
 - **Category Breakdown** - Visual spending distribution across categories
 - **Spending Trends** - Daily, weekly, monthly, and yearly insights
 - **Interactive Charts** - Bar charts, pie charts, and trend lines
+- **AI Analysis** - Gemini-powered spending health score with tailored suggestions
 - **Notification Center** - Real-time alerts for budget limits and spending patterns
 - **Budget History** - Track budget changes over time
 
@@ -99,6 +100,11 @@ A comprehensive expense tracking web application designed specifically for India
    ```bash
    cp .env.example .env
    # Edit .env with your database credentials
+   ```
+
+   Add your Gemini key to enable AI Analysis:
+   ```bash
+   GEMINI_API_KEY=your_gemini_api_key_here
    ```
 
 4. **Start the server**
