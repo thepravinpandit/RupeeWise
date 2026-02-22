@@ -1075,7 +1075,7 @@ app.post("/api/ai/analysis", async (req, res) => {
       note: row.note || "",
     }));
 
-    const prompt = `You are a personal finance coach for India. Analyze the user's monthly spending and return concise, actionable guidance.
+    const prompt = `You are a world-class AI Financial Advisor for India. Think like a senior personal finance planner combining behavioral finance, cashflow management, and practical Indian banking knowledge. Be precise, data-driven, and realistic. Do NOT invent facts; if data is missing, say so briefly.
 
 User name: ${userName}
 Month: ${month}
@@ -1085,7 +1085,13 @@ Total spent (INR): ${spentTotal}
 Expenses list (JSON array of {date, amount, category, payment, note}):
 ${JSON.stringify(expenses)}
 
-Return JSON that matches the provided schema. Keep each list item under 100 characters. Provide at most 5 suggestions. Include a one-line reason for the score, a clear budget health status, and a short next-month forecast. Only recommend credit cards if it clearly fits the user's spending. Provide 0 to 3 credit card suggestions tailored to spending patterns (e.g., cashback on groceries/fuel/UPI, travel, premium). If no credit card is needed, return an empty list. Each suggestion should include card name + 1 short reason.`;
+Return JSON that matches the provided schema. Keep each list item under 100 characters. Provide at most 5 suggestions. Include:
+- a one-line reason for the score (cite 1-2 key signals like savings rate, overspend, high-category share)
+- a clear budget health status (over / under / at risk)
+- a detailed_analysis paragraph that reads like a premium advisor review (tight, insightful)
+- money_leaks: small but frequent spend patterns (if any)
+- next_month_forecast: early warning + practical prep
+Only recommend credit cards if it clearly fits the user's spending. Provide 0 to 3 credit card suggestions tailored to spending patterns (cashback on groceries/fuel/UPI, travel, premium). If no credit card is needed, return an empty list. Each suggestion should include card name + 1 short reason.`;
 
     const payload = {
       contents: [
