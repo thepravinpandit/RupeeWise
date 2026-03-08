@@ -173,6 +173,38 @@ CREATE TABLE IF NOT EXISTS budget_history (
   FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS investments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  kind ENUM('mutual_fund','stock') NOT NULL,
+  fund_name VARCHAR(120),
+  fund_type ENUM('Equity','Debt','Hybrid'),
+  investment_type ENUM('SIP','Lump Sum'),
+  amount_invested DECIMAL(12,2),
+  current_value DECIMAL(12,2),
+  investment_date DATE,
+  stock_name VARCHAR(120),
+  stock_ticker VARCHAR(40),
+  quantity DECIMAL(12,3),
+  avg_buy_price DECIMAL(12,2),
+  current_price DECIMAL(12,2),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS financial_goals (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  name VARCHAR(160) NOT NULL,
+  target_amount DECIMAL(12,2) NOT NULL,
+  target_date DATE NOT NULL,
+  allocated_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE INDEX idx_categories_user ON categories(user_id);
 CREATE INDEX idx_payments_user ON payment_methods(user_id);
 CREATE INDEX idx_expenses_user_date ON expenses(user_id, expense_date);
@@ -187,6 +219,8 @@ CREATE INDEX idx_budget_history_user ON budget_history(user_id);
 CREATE INDEX idx_recurring_user ON recurring_expenses(user_id);
 CREATE INDEX idx_income_sources_user ON income_sources(user_id);
 CREATE INDEX idx_income_entries_user ON income_entries(user_id);
+CREATE INDEX idx_investments_user ON investments(user_id);
+CREATE INDEX idx_goals_user ON financial_goals(user_id);
 
 SET @test_user_id = (SELECT id FROM users WHERE email = 'p@gmail.com' LIMIT 1);
 

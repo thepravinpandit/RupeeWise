@@ -7,11 +7,11 @@ services:
       MYSQL_ROOT_PASSWORD: rupeewise
       MYSQL_DATABASE: rupeewise
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - rupeewise_db:/var/lib/mysql
-    command: ["--default-authentication-plugin=mysql_native_password"]
+    command: [ "--default-authentication-plugin=mysql_native_password" ]
 
   app:
     build:
@@ -28,6 +28,8 @@ services:
       DB_PASSWORD: rupeewise
       DB_NAME: rupeewise
       DB_PORT: 3306
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL}
     ports:
       - "3000:3000"
     volumes:
