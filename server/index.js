@@ -36,6 +36,9 @@ const pool = mysql.createPool({
   port: Number(process.env.DB_PORT) || 3306,
   waitForConnections: true,
   connectionLimit: 10,
+  ssl: process.env.DB_HOST && process.env.DB_HOST !== "127.0.0.1" && process.env.DB_HOST !== "db"
+    ? { rejectUnauthorized: true }
+    : undefined
 });
 
 const BILLS_DIR = path.join(__dirname, "..", "bills");
