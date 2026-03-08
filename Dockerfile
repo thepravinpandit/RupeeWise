@@ -1,0 +1,39 @@
+services:
+db:
+image: mysql:8.0
+container_name: rupeewise-mysql
+restart: unless-stopped
+environment:
+MYSQL_ROOT_PASSWORD: rupeewise
+MYSQL_DATABASE: rupeewise
+ports:
+- "3307:3306"
+volumes:
+- ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+- rupeewise_db:/var/lib/mysql
+command: [ "--default-authentication-plugin=mysql_native_password" ]
+
+app:
+build:
+context: .
+dockerfile: server/Dockerfile
+container_name: rupeewise-app
+restart: unless-stopped
+depends_on:
+- db
+environment:
+PORT: 3000
+DB_HOST: db
+DB_USER: root
+DB_PASSWORD: rupeewise
+DB_NAME: rupeewise
+DB_PORT: 3306
+GEMINI_API_KEY: ${GEMINI_API_KEY}
+GEMINI_MODEL: ${GEMINI_MODEL}
+ports:
+- "3000:3000"
+volumes:
+- ./bills:/app/bills
+
+volumes:
+rupeewise_db:
