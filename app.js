@@ -338,7 +338,7 @@ const updateUserUI = () => {
   elements.userName.textContent = state.user.name || "User";
   elements.userEmail.textContent = state.user.email || "";
   const avatarUrl = state.user.avatarUrl
-    ? `${API_ORIGIN}${state.user.avatarUrl}`
+    ? toAssetUrl(state.user.avatarUrl)
     : "https://placehold.co/120x120?text=RW";
   elements.userAvatar.src = avatarUrl;
   elements.profileAvatar.src = avatarUrl;
@@ -496,6 +496,11 @@ const formatCurrency = (value) =>
   }).format(value || 0);
 
 const formatCurrencyShort = (value) => formatCurrency(value).replace(".00", "");
+const toAssetUrl = (value) => {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return value.startsWith("/") ? `${API_ORIGIN}${value}` : `${API_ORIGIN}/${value}`;
+};
 
 const formatPercent = (value) => {
   if (!Number.isFinite(value)) return "—";
@@ -1326,7 +1331,7 @@ const renderList = (filtered) => {
   const paymentMethod = getPaymentById(expense.paymentMethodId);
   const paymentLabel = paymentMethod ? getPaymentDisplay(paymentMethod) : "Payment";
     const isCredit = isCreditCard(paymentMethod);
-    const receiptUrl = expense.receiptUrl ? `${API_ORIGIN}${expense.receiptUrl}` : "";
+    const receiptUrl = toAssetUrl(expense.receiptUrl);
     const receiptName = expense.receiptName || "receipt";
     const tags = extractNoteTags(expense.note || "");
     const tagsMarkup = tags.length

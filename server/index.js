@@ -6,6 +6,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 require("dotenv").config();
 
 const app = express();
@@ -44,11 +45,25 @@ const pool = mysql.createPool({
 const BILLS_DIR = path.join(__dirname, "..", "bills");
 const RECEIPTS_DIR = path.join(BILLS_DIR, "receipts");
 const AVATARS_DIR = path.join(BILLS_DIR, "avatars");
+const FILE_STORAGE_PROVIDER = String(process.env.FILE_STORAGE_PROVIDER || "local").toLowerCase();
+const S3_BUCKET = process.env.AWS_S3_BUCKET || "";
+const S3_REGION =
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || process.env.S3_REGION || "";
+const S3_PUBLIC_BASE_URL = process.env.AWS_S3_PUBLIC_BASE_URL || "";
+const useS3 = FILE_STORAGE_PROVIDER === "s3" && Boolean(S3_BUCKET) && Boolean(S3_REGION);
 
 fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
 fs.mkdirSync(AVATARS_DIR, { recursive: true });
 
 app.use("/bills", express.static(BILLS_DIR));
+
+if (FILE_STORAGE_PROVIDER === "s3" && !useS3) {
+  console.warn(
+    "S3 storage is selected, but AWS_S3_BUCKET/AWS_REGION is missing. Falling back to local storage."
+  );
+}
+
+const s3Client = useS3 ? new S3Client({ region: S3_REGION }) : null;
 
 const query = async (sql, params = []) => {
   const [rows] = await pool.execute(sql, params);
@@ -84,6 +99,25 @@ const callGemini = async ({ apiKey, model, payload }) => {
 };
 
 const getAiCacheKey = (userId, month) => `${userId}:${month}`;
+
+const buildStorageKey = (folder, userId, originalName = "") => {
+  const ext = path.extname(originalName || "").toLowerCase();
+  return `${folder}/${userId}-${Date.now()}-${crypto.randomBytes(8).toString("hex")}${ext}`;
+};
+
+const buildFileUrl = (storedPath) => {
+  if (!storedPath) return null;
+  if (/^https?:\/\//i.test(storedPath)) return storedPath;
+  if (useS3) {
+    if (S3_PUBLIC_BASE_URL) {
+      return `${S3_PUBLIC_BASE_URL.replace(/\/+$/, "")}/${storedPath.replace(/^\/+/, "")}`;
+    }
+    return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${encodeURIComponent(
+      storedPath
+    ).replace(/%2F/g, "/")}`;
+  }
+  return `/bills/${storedPath}`;
+};
 
 const DEFAULT_CATEGORIES = [
   { label: "Groceries", color: "#22c55e" },
@@ -260,26 +294,49 @@ const recordBudgetHistory = async ({
   );
 };
 
-const receiptStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, RECEIPTS_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const name = `${req.user.userId}-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
-    cb(null, name);
-  },
-});
+const localDiskStorage = (folder) =>
+  multer.diskStorage({
+    destination: (req, file, cb) =>
+      cb(null, folder === "receipts" ? RECEIPTS_DIR : AVATARS_DIR),
+    filename: (req, file, cb) => {
+      const key = buildStorageKey(folder, req.user.userId, file.originalname);
+      cb(null, path.basename(key));
+    },
+  });
 
-const avatarStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, AVATARS_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const name = `${req.user.userId}-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
-    cb(null, name);
-  },
-});
+const saveUploadedFile = async ({ userId, folder, file }) => {
+  if (!file) throw new Error("No file");
+  if (useS3) {
+    const key = buildStorageKey(folder, userId, file.originalname);
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      })
+    );
+    return {
+      storedPath: key,
+      url: buildFileUrl(key),
+      name: file.originalname,
+      type: file.mimetype,
+      size: file.size,
+    };
+  }
+
+  const storedPath = `${folder}/${file.filename}`;
+  return {
+    storedPath,
+    url: buildFileUrl(storedPath),
+    name: file.originalname,
+    type: file.mimetype,
+    size: file.size,
+  };
+};
 
 const receiptUpload = multer({
-  storage: receiptStorage,
+  storage: useS3 ? multer.memoryStorage() : localDiskStorage("receipts"),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok =
@@ -289,7 +346,7 @@ const receiptUpload = multer({
 });
 
 const avatarUpload = multer({
-  storage: avatarStorage,
+  storage: useS3 ? multer.memoryStorage() : localDiskStorage("avatars"),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok = file.mimetype.startsWith("image/");
@@ -322,7 +379,7 @@ const formatUser = (row) => {
     id: row.id,
     name: row.name,
     email: row.email,
-    avatarUrl: row.avatar_path ? `/bills/${row.avatar_path}` : null,
+    avatarUrl: buildFileUrl(row.avatar_path),
   };
 };
 
@@ -431,9 +488,13 @@ app.put("/api/profile", async (req, res) => {
 app.post("/api/profile/avatar", avatarUpload.single("avatar"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
 
-  const avatarPath = `avatars/${req.file.filename}`;
+  const uploaded = await saveUploadedFile({
+    userId: req.user.userId,
+    folder: "avatars",
+    file: req.file,
+  });
   await query("UPDATE users SET avatar_path = ? WHERE id = ?", [
-    avatarPath,
+    uploaded.storedPath,
     req.user.userId,
   ]);
 
@@ -646,7 +707,7 @@ app.get("/api/expenses", async (req, res) => {
   const rows = await query(sql, params);
   const items = rows.map((row) => ({
     ...row,
-    receiptUrl: row.receiptPath ? `/bills/${row.receiptPath}` : null,
+    receiptUrl: buildFileUrl(row.receiptPath),
   }));
   res.json({ items });
 });
@@ -688,22 +749,26 @@ app.post("/api/expenses/:id/receipt", receiptUpload.single("receipt"), async (re
   ]);
   if (!rows.length) return res.status(404).json({ error: "Not found" });
 
-  const receiptPath = `receipts/${req.file.filename}`;
+  const uploaded = await saveUploadedFile({
+    userId: req.user.userId,
+    folder: "receipts",
+    file: req.file,
+  });
   await query(
     "UPDATE expenses SET receipt_path = ?, receipt_name = ?, receipt_type = ?, receipt_size = ? WHERE id = ? AND user_id = ?",
     [
-      receiptPath,
-      req.file.originalname,
-      req.file.mimetype,
-      req.file.size,
+      uploaded.storedPath,
+      uploaded.name,
+      uploaded.type,
+      uploaded.size,
       id,
       req.user.userId,
     ]
   );
 
   res.json({
-    receiptUrl: `/bills/${receiptPath}`,
-    receiptName: req.file.originalname,
+    receiptUrl: uploaded.url,
+    receiptName: uploaded.name,
   });
 });
 
