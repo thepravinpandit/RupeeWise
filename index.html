@@ -185,6 +185,33 @@
           </div>
         </div>
 
+        <div class="nav-section" data-section="investments">
+          <button class="tab nav-title" data-section="investments">
+            <span class="tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" stroke-width="1.7">
+                <path d="M4 19h16" />
+                <path d="M6 15l4-4 4 3 4-6" />
+                <circle cx="6" cy="15" r="1.5" />
+                <circle cx="10" cy="11" r="1.5" />
+                <circle cx="14" cy="14" r="1.5" />
+                <circle cx="18" cy="8" r="1.5" />
+              </svg>
+            </span>
+            Investments
+          </button>
+          <div class="nav-sub">
+            <button class="tab tab-sub" data-tab="investments">
+              <span class="tab-icon small" aria-hidden="true">
+                <svg viewBox="0 0 24 24" stroke-width="1.7">
+                  <rect x="4" y="4" width="16" height="16" rx="3" />
+                  <path d="M7 12h10M9.5 8.5h5M9.5 15.5h5" />
+                </svg>
+              </span>
+              Investments &amp; Goals
+            </button>
+          </div>
+        </div>
+
         <div class="nav-section" data-section="profile">
           <button class="tab nav-title" data-section="profile">
             <span class="tab-icon" aria-hidden="true">
@@ -352,6 +379,100 @@
             </section>
           </div>
         </section>
+      </section>
+
+      <section class="tab-panel" data-panel="investments">
+        <div class="budget-grid investments-grid">
+          <section class="panel card">
+            <div class="panel-header">
+              <div>
+                <h2>Mutual Funds / SIP Tracker</h2>
+                <span class="hint">Track SIPs and lump sum investments.</span>
+              </div>
+            </div>
+            <form id="fund-form" class="mini-form">
+              <input id="fund-name" type="text" placeholder="Fund name" required />
+              <select id="fund-type" required>
+                <option value="" disabled selected>Fund type</option>
+                <option value="Equity">Equity</option>
+                <option value="Debt">Debt</option>
+                <option value="Hybrid">Hybrid</option>
+              </select>
+              <select id="fund-investment-type" required>
+                <option value="" disabled selected>Investment type</option>
+                <option value="SIP">SIP</option>
+                <option value="Lump Sum">Lump Sum</option>
+              </select>
+              <input id="fund-amount" type="number" min="0" step="0.01" placeholder="Amount invested (₹)" required />
+              <input id="fund-current" type="number" min="0" step="0.01" placeholder="Current value (₹)" required />
+              <input id="fund-date" type="date" required />
+              <button class="primary" type="submit">Save fund</button>
+            </form>
+            <div class="investment-summary">
+              <div class="insight-card">
+                <span class="label">Total invested</span>
+                <strong id="fund-invested-total">₹0</strong>
+              </div>
+              <div class="insight-card">
+                <span class="label">Current value</span>
+                <strong id="fund-current-total">₹0</strong>
+              </div>
+              <div class="insight-card">
+                <span class="label">Returns</span>
+                <strong id="fund-return-percent">—</strong>
+              </div>
+            </div>
+            <div id="fund-list" class="method-list scroll-list"></div>
+          </section>
+
+          <section class="panel card">
+            <div class="panel-header">
+              <div>
+                <h2>Stock Portfolio Tracker</h2>
+                <span class="hint">Log holdings and track P&amp;L.</span>
+              </div>
+            </div>
+            <form id="stock-form" class="mini-form">
+              <input id="stock-name" type="text" placeholder="Stock name" required />
+              <input id="stock-ticker" type="text" placeholder="Ticker (optional)" />
+              <input id="stock-quantity" type="number" min="0" step="0.001" placeholder="Quantity" required />
+              <input id="stock-avg-price" type="number" min="0" step="0.01" placeholder="Avg buy price (₹)" required />
+              <input id="stock-current-price" type="number" min="0" step="0.01" placeholder="Current market price (₹)" required />
+              <button class="primary" type="submit">Save holding</button>
+            </form>
+            <div class="investment-summary">
+              <div class="insight-card">
+                <span class="label">Total invested</span>
+                <strong id="stock-invested-total">₹0</strong>
+              </div>
+              <div class="insight-card">
+                <span class="label">Current value</span>
+                <strong id="stock-current-total">₹0</strong>
+              </div>
+              <div class="insight-card">
+                <span class="label">P&amp;L</span>
+                <strong id="stock-pnl-total">—</strong>
+              </div>
+            </div>
+            <div id="stock-list" class="method-list scroll-list"></div>
+          </section>
+
+          <section class="panel card">
+            <div class="panel-header">
+              <div>
+                <h2>Financial Goals</h2>
+                <span class="hint">Allocate savings toward your goals.</span>
+              </div>
+            </div>
+            <form id="goal-form" class="mini-form">
+              <input id="goal-name" type="text" placeholder="Goal name" required />
+              <input id="goal-target-amount" type="number" min="0" step="0.01" placeholder="Target amount (₹)" required />
+              <input id="goal-target-date" type="date" required />
+              <button class="primary" type="submit">Create goal</button>
+            </form>
+            <div id="goal-list" class="method-list scroll-list"></div>
+          </section>
+        </div>
       </section>
 
       <section class="tab-panel" data-panel="ai">

@@ -140,6 +140,32 @@ const elements = {
   incomeTotal: document.querySelector("#income-total"),
   incomeRemaining: document.querySelector("#income-remaining"),
   incomeSavings: document.querySelector("#income-savings"),
+  fundForm: document.querySelector("#fund-form"),
+  fundName: document.querySelector("#fund-name"),
+  fundType: document.querySelector("#fund-type"),
+  fundInvestmentType: document.querySelector("#fund-investment-type"),
+  fundAmount: document.querySelector("#fund-amount"),
+  fundCurrent: document.querySelector("#fund-current"),
+  fundDate: document.querySelector("#fund-date"),
+  fundList: document.querySelector("#fund-list"),
+  fundInvestedTotal: document.querySelector("#fund-invested-total"),
+  fundCurrentTotal: document.querySelector("#fund-current-total"),
+  fundReturnPercent: document.querySelector("#fund-return-percent"),
+  stockForm: document.querySelector("#stock-form"),
+  stockName: document.querySelector("#stock-name"),
+  stockTicker: document.querySelector("#stock-ticker"),
+  stockQuantity: document.querySelector("#stock-quantity"),
+  stockAvgPrice: document.querySelector("#stock-avg-price"),
+  stockCurrentPrice: document.querySelector("#stock-current-price"),
+  stockList: document.querySelector("#stock-list"),
+  stockInvestedTotal: document.querySelector("#stock-invested-total"),
+  stockCurrentTotal: document.querySelector("#stock-current-total"),
+  stockPnlTotal: document.querySelector("#stock-pnl-total"),
+  goalForm: document.querySelector("#goal-form"),
+  goalName: document.querySelector("#goal-name"),
+  goalTargetAmount: document.querySelector("#goal-target-amount"),
+  goalTargetDate: document.querySelector("#goal-target-date"),
+  goalList: document.querySelector("#goal-list"),
   loginForm: document.querySelector("#login-form"),
   loginEmail: document.querySelector("#login-email"),
   loginPassword: document.querySelector("#login-password"),
@@ -207,6 +233,8 @@ let state = {
   recurringExpenses: [],
   incomeSources: [],
   incomeEntries: [],
+  investments: [],
+  goals: [],
   paymentMethods: [],
   defaultPaymentId: "",
   categories: [],
@@ -220,6 +248,8 @@ let editingPaymentId = null;
 let editingCategoryBudgetId = null;
 let editingRecurringId = null;
 let editingIncomeSourceId = null;
+let editingInvestmentId = null;
+let editingGoalId = null;
 
 const authHeaders = (headers = {}) => {
   if (!state.token) return headers;
@@ -466,6 +496,12 @@ const formatCurrency = (value) =>
   }).format(value || 0);
 
 const formatCurrencyShort = (value) => formatCurrency(value).replace(".00", "");
+
+const formatPercent = (value) => {
+  if (!Number.isFinite(value)) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
+};
 
 const extractNoteTags = (note = "") => {
   const tags = note.match(/#[\w-]+/g) || [];
@@ -1215,6 +1251,9 @@ const getScrollContainers = () => [
   elements.incomeList,
   elements.recurringList,
   elements.notificationList,
+  elements.fundList,
+  elements.stockList,
+  elements.goalList,
 ];
 
 const refreshScrollLimits = () => {
@@ -1858,6 +1897,434 @@ const renderRecurringList = () => {
   applyScrollLimit(elements.recurringList);
 };
 
+const renderInvestments = () => {
+  if (!elements.fundList || !elements.stockList) return;
+  const funds = state.investments.filter((item) => item.kind === "mutual_fund");
+  const stocks = state.investments.filter((item) => item.kind === "stock");
+
+  const fundInvested = funds.reduce((sum, item) => sum + (item.amountInvested || 0), 0);
+  const fundCurrent = funds.reduce((sum, item) => sum + (item.currentValue || 0), 0);
+  const fundReturnPct = fundInvested
+    ? ((fundCurrent - fundInvested) / fundInvested) * 100
+    : 0;
+
+  if (elements.fundInvestedTotal)
+    elements.fundInvestedTotal.textContent = formatCurrency(fundInvested);
+  if (elements.fundCurrentTotal)
+    elements.fundCurrentTotal.textContent = formatCurrency(fundCurrent);
+  if (elements.fundReturnPercent)
+    elements.fundReturnPercent.textContent = formatPercent(fundReturnPct);
+
+  elements.fundList.innerHTML = "";
+  if (!funds.length) {
+    elements.fundList.innerHTML = '<p class="hint">No mutual funds added yet.</p>';
+  } else {
+    funds.forEach((fund) => {
+      const item = document.createElement("div");
+      item.className = `method-item${editingInvestmentId === fund.id ? " editing" : ""}`;
+      item.dataset.id = fund.id;
+      item.dataset.kind = "mutual_fund";
+      if (editingInvestmentId === fund.id) {
+        item.innerHTML = `
+          <div class="method-edit-grid">
+            <label>
+              <span class="hint small">Fund name</span>
+              <input data-field="fundName" type="text" value="${fund.fundName || ""}" />
+            </label>
+            <label>
+              <span class="hint small">Fund type</span>
+              <select data-field="fundType">
+                ${["Equity", "Debt", "Hybrid"]
+                  .map(
+                    (type) =>
+                      `<option value="${type}" ${
+                        fund.fundType === type ? "selected" : ""
+                      }>${type}</option>`
+                  )
+                  .join("")}
+              </select>
+            </label>
+            <label>
+              <span class="hint small">Investment type</span>
+              <select data-field="investmentType">
+                ${["SIP", "Lump Sum"]
+                  .map(
+                    (type) =>
+                      `<option value="${type}" ${
+                        fund.investmentType === type ? "selected" : ""
+                      }>${type}</option>`
+                  )
+                  .join("")}
+              </select>
+            </label>
+            <label>
+              <span class="hint small">Amount invested (₹)</span>
+              <input data-field="amountInvested" type="number" min="0" step="0.01" value="${fund.amountInvested || 0}" />
+            </label>
+            <label>
+              <span class="hint small">Current value (₹)</span>
+              <input data-field="currentValue" type="number" min="0" step="0.01" value="${fund.currentValue || 0}" />
+            </label>
+            <label>
+              <span class="hint small">Investment date</span>
+              <input data-field="investmentDate" type="date" value="${fund.investmentDate || ""}" />
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="primary" data-action="save" data-id="${fund.id}">Save</button>
+            <button class="ghost" data-action="cancel" data-id="${fund.id}">Cancel</button>
+          </div>
+        `;
+      } else {
+        const returnPct = fund.amountInvested
+          ? ((fund.currentValue - fund.amountInvested) / fund.amountInvested) * 100
+          : 0;
+        item.innerHTML = `
+          <div class="method-meta">
+            <strong>${fund.fundName || "Mutual fund"}</strong>
+            <span class="badge-lite">${fund.fundType || "Fund"} • ${
+          fund.investmentType || "SIP"
+        }</span>
+            <span class="hint small">Invested ${formatCurrency(
+              fund.amountInvested
+            )} • Current ${formatCurrency(fund.currentValue)}</span>
+            <span class="hint small">Date: ${
+              fund.investmentDate ? formatDate(fund.investmentDate) : "—"
+            }</span>
+          </div>
+          <div class="form-actions">
+            <span class="badge-lite">${formatPercent(returnPct)}</span>
+            <button class="ghost" data-action="edit" data-id="${fund.id}">Edit</button>
+            <button class="ghost danger" data-action="delete" data-id="${fund.id}">Delete</button>
+          </div>
+        `;
+      }
+      elements.fundList.appendChild(item);
+    });
+  }
+
+  const stockInvested = stocks.reduce(
+    (sum, item) => sum + item.quantity * item.avgBuyPrice,
+    0
+  );
+  const stockCurrent = stocks.reduce(
+    (sum, item) => sum + item.quantity * item.currentPrice,
+    0
+  );
+  const stockPnl = stockCurrent - stockInvested;
+  if (elements.stockInvestedTotal)
+    elements.stockInvestedTotal.textContent = formatCurrency(stockInvested);
+  if (elements.stockCurrentTotal)
+    elements.stockCurrentTotal.textContent = formatCurrency(stockCurrent);
+  if (elements.stockPnlTotal)
+    elements.stockPnlTotal.textContent = `${formatCurrency(stockPnl)} (${formatPercent(
+      stockInvested ? (stockPnl / stockInvested) * 100 : 0
+    )})`;
+
+  elements.stockList.innerHTML = "";
+  if (!stocks.length) {
+    elements.stockList.innerHTML = '<p class="hint">No stock holdings added yet.</p>';
+  } else {
+    stocks.forEach((stock) => {
+      const item = document.createElement("div");
+      item.className = `method-item${editingInvestmentId === stock.id ? " editing" : ""}`;
+      item.dataset.id = stock.id;
+      item.dataset.kind = "stock";
+      if (editingInvestmentId === stock.id) {
+        item.innerHTML = `
+          <div class="method-edit-grid">
+            <label>
+              <span class="hint small">Stock name</span>
+              <input data-field="stockName" type="text" value="${stock.stockName || ""}" />
+            </label>
+            <label>
+              <span class="hint small">Ticker</span>
+              <input data-field="stockTicker" type="text" value="${stock.stockTicker || ""}" />
+            </label>
+            <label>
+              <span class="hint small">Quantity</span>
+              <input data-field="quantity" type="number" min="0" step="0.001" value="${stock.quantity || 0}" />
+            </label>
+            <label>
+              <span class="hint small">Avg buy price (₹)</span>
+              <input data-field="avgBuyPrice" type="number" min="0" step="0.01" value="${stock.avgBuyPrice || 0}" />
+            </label>
+            <label>
+              <span class="hint small">Current price (₹)</span>
+              <input data-field="currentPrice" type="number" min="0" step="0.01" value="${stock.currentPrice || 0}" />
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="primary" data-action="save" data-id="${stock.id}">Save</button>
+            <button class="ghost" data-action="cancel" data-id="${stock.id}">Cancel</button>
+          </div>
+        `;
+      } else {
+        const invested = stock.quantity * stock.avgBuyPrice;
+        const current = stock.quantity * stock.currentPrice;
+        const pnl = current - invested;
+        item.innerHTML = `
+          <div class="method-meta">
+            <strong>${stock.stockName || "Stock"} ${
+          stock.stockTicker ? `(${stock.stockTicker})` : ""
+        }</strong>
+            <span class="badge-lite">${stock.quantity} shares • Avg ₹${stock.avgBuyPrice}</span>
+            <span class="hint small">Invested ${formatCurrency(
+              invested
+            )} • Current ${formatCurrency(current)}</span>
+          </div>
+          <div class="form-actions">
+            <span class="badge-lite">${formatCurrency(pnl)}</span>
+            <button class="ghost" data-action="edit" data-id="${stock.id}">Edit</button>
+            <button class="ghost danger" data-action="delete" data-id="${stock.id}">Delete</button>
+          </div>
+        `;
+      }
+      elements.stockList.appendChild(item);
+    });
+  }
+
+  applyScrollLimit(elements.fundList);
+  applyScrollLimit(elements.stockList);
+};
+
+const renderGoals = () => {
+  if (!elements.goalList) return;
+  elements.goalList.innerHTML = "";
+  if (!state.goals.length) {
+    elements.goalList.innerHTML = '<p class="hint">No goals added yet.</p>';
+    applyScrollLimit(elements.goalList);
+    return;
+  }
+
+  state.goals.forEach((goal) => {
+    const item = document.createElement("div");
+    item.className = `method-item${editingGoalId === goal.id ? " editing" : ""}`;
+    item.dataset.id = goal.id;
+    if (editingGoalId === goal.id) {
+      item.innerHTML = `
+        <div class="method-edit-grid">
+          <label>
+            <span class="hint small">Goal name</span>
+            <input data-field="name" type="text" value="${goal.name || ""}" />
+          </label>
+          <label>
+            <span class="hint small">Target amount (₹)</span>
+            <input data-field="targetAmount" type="number" min="0" step="0.01" value="${goal.targetAmount || 0}" />
+          </label>
+          <label>
+            <span class="hint small">Target date</span>
+            <input data-field="targetDate" type="date" value="${goal.targetDate || ""}" />
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="primary" data-action="save" data-id="${goal.id}">Save</button>
+          <button class="ghost" data-action="cancel" data-id="${goal.id}">Cancel</button>
+        </div>
+      `;
+    } else {
+      const progress = goal.targetAmount
+        ? Math.min((goal.allocatedAmount / goal.targetAmount) * 100, 100)
+        : 0;
+      item.innerHTML = `
+        <div class="method-meta goal-meta">
+          <strong>${goal.name || "Goal"}</strong>
+          <span class="hint small">Target ${formatCurrency(goal.targetAmount)} by ${
+        goal.targetDate ? formatDate(goal.targetDate) : "—"
+      }</span>
+          <div class="goal-progress">
+            <div class="goal-bar" style="width:${progress}%"></div>
+          </div>
+          <span class="hint small">${formatCurrency(goal.allocatedAmount)} allocated</span>
+        </div>
+        <div class="goal-actions">
+          <div class="goal-allocate">
+            <input data-field="allocate" type="number" min="0" step="0.01" placeholder="₹ Allocate" />
+            <button class="primary" data-action="allocate" data-id="${goal.id}">Allocate</button>
+          </div>
+          <div class="form-actions">
+            <button class="ghost" data-action="edit" data-id="${goal.id}">Edit</button>
+            <button class="ghost danger" data-action="delete" data-id="${goal.id}">Delete</button>
+          </div>
+        </div>
+      `;
+    }
+    elements.goalList.appendChild(item);
+  });
+  applyScrollLimit(elements.goalList);
+};
+
+const handleFundSubmit = async (event) => {
+  event.preventDefault();
+  const payload = {
+    kind: "mutual_fund",
+    fundName: elements.fundName.value.trim(),
+    fundType: elements.fundType.value,
+    investmentType: elements.fundInvestmentType.value,
+    amountInvested: Number(elements.fundAmount.value || 0),
+    currentValue: Number(elements.fundCurrent.value || 0),
+    investmentDate: elements.fundDate.value,
+  };
+  await fetchJSON(`${API_BASE}/investments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  elements.fundForm.reset();
+  await loadInvestments();
+};
+
+const handleStockSubmit = async (event) => {
+  event.preventDefault();
+  const payload = {
+    kind: "stock",
+    stockName: elements.stockName.value.trim(),
+    stockTicker: elements.stockTicker.value.trim(),
+    quantity: Number(elements.stockQuantity.value || 0),
+    avgBuyPrice: Number(elements.stockAvgPrice.value || 0),
+    currentPrice: Number(elements.stockCurrentPrice.value || 0),
+  };
+  await fetchJSON(`${API_BASE}/investments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  elements.stockForm.reset();
+  await loadInvestments();
+};
+
+const handleInvestmentListClick = async (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  const action = button.dataset.action;
+  const item = button.closest(".method-item");
+  const id = Number(button.dataset.id || item?.dataset.id);
+  const kind = item?.dataset.kind;
+  if (!id || !kind) return;
+
+  if (action === "edit") {
+    editingInvestmentId = id;
+    renderInvestments();
+    return;
+  }
+  if (action === "cancel") {
+    editingInvestmentId = null;
+    renderInvestments();
+    return;
+  }
+  if (action === "delete") {
+    await fetchJSON(`${API_BASE}/investments/${id}`, { method: "DELETE" });
+    await loadInvestments();
+    return;
+  }
+  if (action === "save") {
+    const fields = Array.from(item.querySelectorAll("[data-field]"));
+    const values = {};
+    fields.forEach((field) => {
+      values[field.dataset.field] = field.value;
+    });
+    const payload =
+      kind === "mutual_fund"
+        ? {
+            kind,
+            fundName: values.fundName?.trim() || "",
+            fundType: values.fundType,
+            investmentType: values.investmentType,
+            amountInvested: Number(values.amountInvested || 0),
+            currentValue: Number(values.currentValue || 0),
+            investmentDate: values.investmentDate,
+          }
+        : {
+            kind,
+            stockName: values.stockName?.trim() || "",
+            stockTicker: values.stockTicker?.trim() || "",
+            quantity: Number(values.quantity || 0),
+            avgBuyPrice: Number(values.avgBuyPrice || 0),
+            currentPrice: Number(values.currentPrice || 0),
+          };
+    await fetchJSON(`${API_BASE}/investments/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    editingInvestmentId = null;
+    await loadInvestments();
+  }
+};
+
+const handleGoalSubmit = async (event) => {
+  event.preventDefault();
+  const payload = {
+    name: elements.goalName.value.trim(),
+    targetAmount: Number(elements.goalTargetAmount.value || 0),
+    targetDate: elements.goalTargetDate.value,
+  };
+  await fetchJSON(`${API_BASE}/goals`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  elements.goalForm.reset();
+  await loadGoals();
+};
+
+const handleGoalListClick = async (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  const action = button.dataset.action;
+  const item = button.closest(".method-item");
+  const id = Number(button.dataset.id || item?.dataset.id);
+  if (!id) return;
+
+  if (action === "edit") {
+    editingGoalId = id;
+    renderGoals();
+    return;
+  }
+  if (action === "cancel") {
+    editingGoalId = null;
+    renderGoals();
+    return;
+  }
+  if (action === "delete") {
+    await fetchJSON(`${API_BASE}/goals/${id}`, { method: "DELETE" });
+    await loadGoals();
+    return;
+  }
+  if (action === "save") {
+    const fields = Array.from(item.querySelectorAll("[data-field]"));
+    const values = {};
+    fields.forEach((field) => {
+      values[field.dataset.field] = field.value;
+    });
+    const payload = {
+      name: values.name?.trim() || "",
+      targetAmount: Number(values.targetAmount || 0),
+      targetDate: values.targetDate,
+    };
+    await fetchJSON(`${API_BASE}/goals/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    editingGoalId = null;
+    await loadGoals();
+    return;
+  }
+  if (action === "allocate") {
+    const amountField = item.querySelector("[data-field=\"allocate\"]");
+    const amount = Number(amountField?.value || 0);
+    if (!amount || amount <= 0) return;
+    await fetchJSON(`${API_BASE}/goals/${id}/allocate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount }),
+    });
+    if (amountField) amountField.value = "";
+    await loadGoals();
+  }
+};
+
 const render = () => {
   updateSnapshot(state.expenses);
   renderBreakdown(state.expenses);
@@ -2022,6 +2489,33 @@ const loadIncomeEntries = async () => {
   renderIncomeEntries();
 };
 
+const loadInvestments = async () => {
+  const data = await fetchJSON(`${API_BASE}/investments`);
+  state.investments = (data.items || []).map((item) => ({
+    ...item,
+    id: Number(item.id),
+    amountInvested: Number(item.amountInvested || 0),
+    currentValue: Number(item.currentValue || 0),
+    quantity: Number(item.quantity || 0),
+    avgBuyPrice: Number(item.avgBuyPrice || 0),
+    currentPrice: Number(item.currentPrice || 0),
+  }));
+  editingInvestmentId = null;
+  renderInvestments();
+};
+
+const loadGoals = async () => {
+  const data = await fetchJSON(`${API_BASE}/goals`);
+  state.goals = (data.items || []).map((item) => ({
+    ...item,
+    id: Number(item.id),
+    targetAmount: Number(item.targetAmount || 0),
+    allocatedAmount: Number(item.allocatedAmount || 0),
+  }));
+  editingGoalId = null;
+  renderGoals();
+};
+
 const loadBudget = async () => {
   const month = getBudgetMonth();
   const data = await fetchJSON(`${API_BASE}/budget?month=${month}`);
@@ -2071,7 +2565,7 @@ const refreshAll = async () => {
   await Promise.all([loadCategoryBudgets(), loadRecurringExpenses(), loadIncomeSources()]);
   await loadBudget();
   await refreshExpenses();
-  await Promise.all([loadBudgetHistory(), loadIncomeEntries()]);
+  await Promise.all([loadBudgetHistory(), loadIncomeEntries(), loadInvestments(), loadGoals()]);
   resetForm();
   if (elements.aiMonth) {
     updateAiMeta();
@@ -3173,6 +3667,12 @@ if (elements.cancelPassword)
 if (elements.savePassword) elements.savePassword.addEventListener("click", handlePasswordUpdate);
 if (elements.deleteAccountButton)
   elements.deleteAccountButton.addEventListener("click", handleDeleteAccount);
+if (elements.fundForm) elements.fundForm.addEventListener("submit", handleFundSubmit);
+if (elements.stockForm) elements.stockForm.addEventListener("submit", handleStockSubmit);
+if (elements.fundList) elements.fundList.addEventListener("click", handleInvestmentListClick);
+if (elements.stockList) elements.stockList.addEventListener("click", handleInvestmentListClick);
+if (elements.goalForm) elements.goalForm.addEventListener("submit", handleGoalSubmit);
+if (elements.goalList) elements.goalList.addEventListener("click", handleGoalListClick);
 elements.passwordToggles.forEach((button) =>
   button.addEventListener("click", handleTogglePassword)
 );
@@ -3201,6 +3701,7 @@ if (elements.registerConfirm) {
     elements.registerConfirm.classList.remove("input-invalid")
   );
 }
+
 
 if (elements.insightRangeButtons.length) {
   elements.insightRangeButtons.forEach((button) =>

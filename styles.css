@@ -94,6 +94,10 @@ body.theme-dark .ai-list li {
   border-color: rgba(148, 163, 184, 0.25);
 }
 
+body.theme-dark .goal-progress {
+  background: rgba(148, 163, 184, 0.2);
+}
+
 body.theme-dark .score-meter {
   background: rgba(148, 163, 184, 0.2);
 }
@@ -1527,6 +1531,45 @@ button:not(:disabled):hover {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   align-items: start;
+}
+
+.investment-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.goal-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.1);
+  overflow: hidden;
+}
+
+.goal-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.goal-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.goal-allocate {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.goal-allocate input {
+  min-width: 140px;
 }
 
 .budget-list {

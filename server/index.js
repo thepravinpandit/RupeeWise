@@ -990,6 +990,197 @@ app.get("/api/income", async (req, res) => {
   res.json({ items: rows });
 });
 
+app.get("/api/investments", async (req, res) => {
+  const rows = await query(
+    `SELECT id, kind,
+            fund_name AS fundName, fund_type AS fundType,
+            investment_type AS investmentType,
+            amount_invested AS amountInvested,
+            current_value AS currentValue,
+            investment_date AS investmentDate,
+            stock_name AS stockName, stock_ticker AS stockTicker,
+            quantity, avg_buy_price AS avgBuyPrice, current_price AS currentPrice
+     FROM investments
+     WHERE user_id = ?
+     ORDER BY created_at DESC`,
+    [req.user.userId]
+  );
+  res.json({ items: rows });
+});
+
+app.post("/api/investments", async (req, res) => {
+  const {
+    kind,
+    fundName,
+    fundType,
+    investmentType,
+    amountInvested,
+    currentValue,
+    investmentDate,
+    stockName,
+    stockTicker,
+    quantity,
+    avgBuyPrice,
+    currentPrice,
+  } = req.body;
+
+  if (kind === "mutual_fund") {
+    if (!fundName || !fundType || !investmentType || !amountInvested || !currentValue || !investmentDate) {
+      return res.status(400).json({ error: "Invalid payload" });
+    }
+  } else if (kind === "stock") {
+    if ((!stockName && !stockTicker) || !quantity || !avgBuyPrice || !currentPrice) {
+      return res.status(400).json({ error: "Invalid payload" });
+    }
+  } else {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+
+  const result = await query(
+    `INSERT INTO investments
+     (user_id, kind, fund_name, fund_type, investment_type, amount_invested, current_value, investment_date,
+      stock_name, stock_ticker, quantity, avg_buy_price, current_price)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      req.user.userId,
+      kind,
+      fundName || null,
+      fundType || null,
+      investmentType || null,
+      amountInvested || null,
+      currentValue || null,
+      investmentDate || null,
+      stockName || null,
+      stockTicker || null,
+      quantity || null,
+      avgBuyPrice || null,
+      currentPrice || null,
+    ]
+  );
+  res.status(201).json({ id: result.insertId });
+});
+
+app.put("/api/investments/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const {
+    kind,
+    fundName,
+    fundType,
+    investmentType,
+    amountInvested,
+    currentValue,
+    investmentDate,
+    stockName,
+    stockTicker,
+    quantity,
+    avgBuyPrice,
+    currentPrice,
+  } = req.body;
+
+  if (kind === "mutual_fund") {
+    if (!fundName || !fundType || !investmentType || !amountInvested || !currentValue || !investmentDate) {
+      return res.status(400).json({ error: "Invalid payload" });
+    }
+  } else if (kind === "stock") {
+    if ((!stockName && !stockTicker) || !quantity || !avgBuyPrice || !currentPrice) {
+      return res.status(400).json({ error: "Invalid payload" });
+    }
+  } else {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+
+  await query(
+    `UPDATE investments
+     SET fund_name = ?, fund_type = ?, investment_type = ?, amount_invested = ?, current_value = ?, investment_date = ?,
+         stock_name = ?, stock_ticker = ?, quantity = ?, avg_buy_price = ?, current_price = ?
+     WHERE id = ? AND user_id = ?`,
+    [
+      fundName || null,
+      fundType || null,
+      investmentType || null,
+      amountInvested || null,
+      currentValue || null,
+      investmentDate || null,
+      stockName || null,
+      stockTicker || null,
+      quantity || null,
+      avgBuyPrice || null,
+      currentPrice || null,
+      id,
+      req.user.userId,
+    ]
+  );
+  res.json({ ok: true });
+});
+
+app.delete("/api/investments/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await query("DELETE FROM investments WHERE id = ? AND user_id = ?", [
+    id,
+    req.user.userId,
+  ]);
+  res.json({ ok: true });
+});
+
+app.get("/api/goals", async (req, res) => {
+  const rows = await query(
+    `SELECT id, name, target_amount AS targetAmount, target_date AS targetDate,
+            allocated_amount AS allocatedAmount
+     FROM financial_goals
+     WHERE user_id = ?
+     ORDER BY created_at DESC`,
+    [req.user.userId]
+  );
+  res.json({ items: rows });
+});
+
+app.post("/api/goals", async (req, res) => {
+  const { name, targetAmount, targetDate } = req.body;
+  if (!name || !targetAmount || !targetDate) {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+  const result = await query(
+    "INSERT INTO financial_goals (user_id, name, target_amount, target_date, allocated_amount) VALUES (?, ?, ?, ?, 0)",
+    [req.user.userId, name, targetAmount, targetDate]
+  );
+  res.status(201).json({ id: result.insertId });
+});
+
+app.put("/api/goals/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const { name, targetAmount, targetDate } = req.body;
+  if (!name || !targetAmount || !targetDate) {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+  await query(
+    "UPDATE financial_goals SET name = ?, target_amount = ?, target_date = ? WHERE id = ? AND user_id = ?",
+    [name, targetAmount, targetDate, id, req.user.userId]
+  );
+  res.json({ ok: true });
+});
+
+app.post("/api/goals/:id/allocate", async (req, res) => {
+  const id = Number(req.params.id);
+  const { amount } = req.body;
+  if (!amount || Number(amount) <= 0) {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+  await query(
+    "UPDATE financial_goals SET allocated_amount = allocated_amount + ? WHERE id = ? AND user_id = ?",
+    [amount, id, req.user.userId]
+  );
+  res.json({ ok: true });
+});
+
+app.delete("/api/goals/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await query("DELETE FROM financial_goals WHERE id = ? AND user_id = ?", [
+    id,
+    req.user.userId,
+  ]);
+  res.json({ ok: true });
+});
+
 app.post("/api/income", async (req, res) => {
   const { sourceId, amount, date, note } = req.body;
   if (!sourceId || !amount || !date) {
@@ -1184,6 +1375,8 @@ app.delete("/api/reset", async (req, res) => {
   await query("DELETE FROM recurring_expenses WHERE user_id = ?", [req.user.userId]);
   await query("DELETE FROM income_entries WHERE user_id = ?", [req.user.userId]);
   await query("DELETE FROM income_sources WHERE user_id = ?", [req.user.userId]);
+  await query("DELETE FROM investments WHERE user_id = ?", [req.user.userId]);
+  await query("DELETE FROM financial_goals WHERE user_id = ?", [req.user.userId]);
   res.json({ ok: true });
 });
 
