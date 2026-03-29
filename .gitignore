@@ -9,6 +9,8 @@ untitled folder 2/
 
 # Thumbnails
 ._*
+server/.env.example
+.gitignore
 
 # Node.js
 node_modules/

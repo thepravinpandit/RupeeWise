@@ -17,6 +17,10 @@ const redirectToLogin = () => {
 const elements = {
   tabs: document.querySelectorAll(".tab"),
   panels: document.querySelectorAll(".tab-panel"),
+  sidebar: document.querySelector("#sidebar"),
+  mobileMenuOpen: document.querySelector("#mobile-menu-open"),
+  mobileMenuClose: document.querySelector("#mobile-menu-close"),
+  mobileMenuOverlay: document.querySelector("#mobile-menu-overlay"),
   authTab: document.querySelector(".auth-tab"),
   userCard: document.querySelector("#user-card"),
   userAvatar: document.querySelector("#user-avatar"),
@@ -250,6 +254,17 @@ let editingRecurringId = null;
 let editingIncomeSourceId = null;
 let editingInvestmentId = null;
 let editingGoalId = null;
+
+const isMobileViewport = () => window.matchMedia("(max-width: 720px)").matches;
+
+const setMobileMenu = (open) => {
+  if (!elements.sidebar || !elements.mobileMenuOpen || !elements.mobileMenuOverlay) return;
+  const shouldOpen = Boolean(open) && isMobileViewport();
+  elements.sidebar.classList.toggle("mobile-open", shouldOpen);
+  elements.mobileMenuOverlay.classList.toggle("hidden", !shouldOpen);
+  elements.mobileMenuOpen.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  document.body.classList.toggle("menu-open", shouldOpen);
+};
 
 const authHeaders = (headers = {}) => {
   if (!state.token) return headers;
@@ -3243,6 +3258,7 @@ const handleTabClick = (event) => {
     }
   }
   if (button.dataset.action === "alerts") {
+    if (isMobileViewport()) setMobileMenu(false);
     openNotifications();
     return;
   }
@@ -3258,6 +3274,9 @@ const handleTabClick = (event) => {
       const targetEl = document.getElementById(focusId);
       if (targetEl) targetEl.focus({ preventScroll: true });
     });
+  }
+  if (isMobileViewport()) {
+    setMobileMenu(false);
   }
   requestAnimationFrame(refreshScrollLimits);
 };
@@ -3625,6 +3644,9 @@ if (elements.budgetMonth)
   });
 
 window.addEventListener("resize", () => {
+  if (!isMobileViewport()) {
+    setMobileMenu(false);
+  }
   refreshScrollLimits();
 });
 
@@ -3640,6 +3662,15 @@ if (elements.avatarInput && elements.avatarFileName) {
 }
 if (elements.notificationButton) {
   elements.notificationButton.addEventListener("click", openNotifications);
+}
+if (elements.mobileMenuOpen) {
+  elements.mobileMenuOpen.addEventListener("click", () => setMobileMenu(true));
+}
+if (elements.mobileMenuClose) {
+  elements.mobileMenuClose.addEventListener("click", () => setMobileMenu(false));
+}
+if (elements.mobileMenuOverlay) {
+  elements.mobileMenuOverlay.addEventListener("click", () => setMobileMenu(false));
 }
 if (elements.notificationClose) {
   elements.notificationClose.addEventListener("click", closeNotifications);
