@@ -83,6 +83,27 @@ A comprehensive expense tracking web application designed specifically for India
      - Email: `p@gmail.com`
      - Password: `12345678`
 
+4. **(Optional) Use AWS S3 for receipts and avatars**
+   - Add these variables to your root `.env` (used by `docker compose`):
+   ```bash
+   FILE_STORAGE_PROVIDER=s3
+   AWS_REGION=ap-south-1
+   AWS_S3_REGION=ap-south-1
+   AWS_S3_BUCKET=your-bucket-name
+   AWS_S3_PUBLIC_BASE_URL=https://your-bucket-name.s3.ap-south-1.amazonaws.com
+   AWS_ACCESS_KEY_ID=your-access-key
+   AWS_SECRET_ACCESS_KEY=your-secret-key
+   ```
+   - Make sure `AWS_S3_REGION` (or `AWS_REGION`) matches your bucket region.
+   - Verify runtime config:
+   ```bash
+   curl http://localhost:3000/api/storage-health
+   ```
+   - Then restart:
+   ```bash
+   docker compose up --build
+   ```
+
 ### Manual Setup (Without Docker)
 
 1. **Install MySQL 8.0** and create database:
@@ -98,7 +119,7 @@ A comprehensive expense tracking web application designed specifically for India
 
 3. **Configure environment**
    ```bash
-   cp .env.example .env
+   cp server/.env.example server/.env
    # Edit .env with your database credentials
    ```
 

@@ -47,9 +47,19 @@ const RECEIPTS_DIR = path.join(BILLS_DIR, "receipts");
 const AVATARS_DIR = path.join(BILLS_DIR, "avatars");
 const FILE_STORAGE_PROVIDER = String(process.env.FILE_STORAGE_PROVIDER || "local").toLowerCase();
 const S3_BUCKET = process.env.AWS_S3_BUCKET || "";
-const S3_REGION =
-  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || process.env.S3_REGION || "";
 const S3_PUBLIC_BASE_URL = process.env.AWS_S3_PUBLIC_BASE_URL || "";
+const configuredS3Region =
+  process.env.AWS_S3_REGION ||
+  process.env.AWS_REGION ||
+  process.env.AWS_DEFAULT_REGION ||
+  process.env.S3_REGION ||
+  "";
+const inferredS3Region = (() => {
+  if (!S3_PUBLIC_BASE_URL) return "";
+  const match = S3_PUBLIC_BASE_URL.match(/s3[.-]([a-z0-9-]+)\.amazonaws\.com/i);
+  return match?.[1] || "";
+})();
+const S3_REGION = process.env.AWS_S3_REGION || inferredS3Region || configuredS3Region;
 const useS3 = FILE_STORAGE_PROVIDER === "s3" && Boolean(S3_BUCKET) && Boolean(S3_REGION);
 
 fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
@@ -60,6 +70,17 @@ app.use("/bills", express.static(BILLS_DIR));
 if (FILE_STORAGE_PROVIDER === "s3" && !useS3) {
   console.warn(
     "S3 storage is selected, but AWS_S3_BUCKET/AWS_REGION is missing. Falling back to local storage."
+  );
+}
+
+if (
+  FILE_STORAGE_PROVIDER === "s3" &&
+  configuredS3Region &&
+  inferredS3Region &&
+  configuredS3Region !== inferredS3Region
+) {
+  console.warn(
+    `S3 region mismatch detected. Configured region is "${configuredS3Region}" but URL region is "${inferredS3Region}". Using "${S3_REGION}".`
   );
 }
 
@@ -395,6 +416,16 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/storage-health", (req, res) => {
+  res.json({
+    provider: useS3 ? "s3" : "local",
+    configuredProvider: FILE_STORAGE_PROVIDER,
+    bucket: S3_BUCKET || null,
+    region: S3_REGION || null,
+    publicBaseUrl: S3_PUBLIC_BASE_URL || null,
+  });
+});
+
 app.post("/api/auth/register", async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
@@ -487,21 +518,25 @@ app.put("/api/profile", async (req, res) => {
 
 app.post("/api/profile/avatar", avatarUpload.single("avatar"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
+  try {
+    const uploaded = await saveUploadedFile({
+      userId: req.user.userId,
+      folder: "avatars",
+      file: req.file,
+    });
+    await query("UPDATE users SET avatar_path = ? WHERE id = ?", [
+      uploaded.storedPath,
+      req.user.userId,
+    ]);
 
-  const uploaded = await saveUploadedFile({
-    userId: req.user.userId,
-    folder: "avatars",
-    file: req.file,
-  });
-  await query("UPDATE users SET avatar_path = ? WHERE id = ?", [
-    uploaded.storedPath,
-    req.user.userId,
-  ]);
-
-  const rows = await query("SELECT id, name, email, avatar_path FROM users WHERE id = ?", [
-    req.user.userId,
-  ]);
-  res.json({ user: formatUser(rows[0]) });
+    const rows = await query("SELECT id, name, email, avatar_path FROM users WHERE id = ?", [
+      req.user.userId,
+    ]);
+    res.json({ user: formatUser(rows[0]) });
+  } catch (error) {
+    console.error("Avatar upload failed", error);
+    res.status(500).json({ error: "Failed to upload avatar" });
+  }
 });
 
 app.put("/api/profile/password", async (req, res) => {
@@ -749,27 +784,32 @@ app.post("/api/expenses/:id/receipt", receiptUpload.single("receipt"), async (re
   ]);
   if (!rows.length) return res.status(404).json({ error: "Not found" });
 
-  const uploaded = await saveUploadedFile({
-    userId: req.user.userId,
-    folder: "receipts",
-    file: req.file,
-  });
-  await query(
-    "UPDATE expenses SET receipt_path = ?, receipt_name = ?, receipt_type = ?, receipt_size = ? WHERE id = ? AND user_id = ?",
-    [
-      uploaded.storedPath,
-      uploaded.name,
-      uploaded.type,
-      uploaded.size,
-      id,
-      req.user.userId,
-    ]
-  );
+  try {
+    const uploaded = await saveUploadedFile({
+      userId: req.user.userId,
+      folder: "receipts",
+      file: req.file,
+    });
+    await query(
+      "UPDATE expenses SET receipt_path = ?, receipt_name = ?, receipt_type = ?, receipt_size = ? WHERE id = ? AND user_id = ?",
+      [
+        uploaded.storedPath,
+        uploaded.name,
+        uploaded.type,
+        uploaded.size,
+        id,
+        req.user.userId,
+      ]
+    );
 
-  res.json({
-    receiptUrl: uploaded.url,
-    receiptName: uploaded.name,
-  });
+    res.json({
+      receiptUrl: uploaded.url,
+      receiptName: uploaded.name,
+    });
+  } catch (error) {
+    console.error("Receipt upload failed", error);
+    res.status(500).json({ error: "Failed to upload receipt" });
+  }
 });
 
 app.delete("/api/expenses/:id", async (req, res) => {
