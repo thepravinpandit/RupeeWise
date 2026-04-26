@@ -7,7 +7,19 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const nodemailer = require("nodemailer");
 require("dotenv").config();
+
+const validatePassword = (password) => {
+  if (!password || password.length < 8) return false;
+  if (!/[a-z]/.test(password)) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[0-9]/.test(password)) return false;
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) return false;
+  return true;
+};
+
+
 
 const app = express();
 const WEB_ROOT = path.join(__dirname, "..");
@@ -126,7 +138,48 @@ const buildStorageKey = (folder, userId, originalName = "") => {
   return `${folder}/${userId}-${Date.now()}-${crypto.randomBytes(8).toString("hex")}${ext}`;
 };
 
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: Number(process.env.SMTP_PORT) === 465,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const initOtpTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS otp_verifications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      email VARCHAR(160) NOT NULL,
+      otp VARCHAR(6) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_email (email)
+    )
+  `);
+};
+initOtpTable().catch(console.error);
+
+const sendEmail = async ({ to, subject, text, html }) => {
+  try {
+    await transporter.sendMail({
+      from: `"RupeeWise" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      text,
+      html,
+    });
+    return true;
+  } catch (error) {
+    console.error("Email send failed:", error);
+    return false;
+  }
+};
+
 const buildFileUrl = (storedPath) => {
+
   if (!storedPath) return null;
   if (/^https?:\/\//i.test(storedPath)) return storedPath;
   if (useS3) {
@@ -431,14 +484,17 @@ app.post("/api/auth/register", async (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Invalid payload" });
   }
-  if (String(password).length < 8) {
-    return res.status(400).json({ error: "Password too short" });
+
+  if (!validatePassword(password)) {
+    return res.status(400).json({ error: "Password does not meet security requirements." });
   }
+
 
   const existing = await query("SELECT id FROM users WHERE email = ?", [email]);
   if (existing.length) {
-    return res.status(400).json({ error: "Unable to create account" });
+    return res.status(400).json({ error: "An account with this email already exists." });
   }
+
 
   const passwordHash = await bcrypt.hash(password, 10);
   const result = await query(
@@ -486,7 +542,84 @@ app.post("/api/auth/login", async (req, res) => {
   res.json({ token, user: formatUser(userRow) });
 });
 
+app.post("/api/auth/request-otp", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required" });
+
+  const existing = await query("SELECT id FROM users WHERE email = ?", [email]);
+  if (existing.length) {
+    return res.status(400).json({ error: "An account with this email already exists." });
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+
+
+  try {
+    await query("DELETE FROM otp_verifications WHERE email = ?", [email]);
+    await query(
+      "INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))",
+      [email, otp]
+    );
+
+
+    const emailSent = await sendEmail({
+      to: email,
+      subject: "Your RupeeWise Verification Code",
+      text: `Your OTP is ${otp}. It expires in 10 minutes.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #12CC82; text-align: center;">RupeeWise Verification</h2>
+          <p>Hello,</p>
+          <p>Your one-time password (OTP) for verification is:</p>
+          <div style="font-size: 32px; font-weight: bold; text-align: center; letter-spacing: 5px; margin: 20px 0; color: #333;">
+            ${otp}
+          </div>
+          <p style="color: #666; font-size: 14px;">This code will expire in 10 minutes. If you didn't request this, please ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #999; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} RupeeWise. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    if (emailSent) {
+      res.json({ message: "OTP sent successfully" });
+    } else {
+      res.status(500).json({ error: "Failed to send email. Check SMTP settings." });
+    }
+  } catch (error) {
+    console.error("OTP Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/auth/verify-otp", async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ error: "Email and OTP are required" });
+
+  try {
+    const rows = await query(
+
+      "SELECT id FROM otp_verifications WHERE email = ? AND otp = ? AND expires_at >= NOW() LIMIT 1",
+      [email, otp]
+    );
+
+    if (rows.length) {
+      await query("DELETE FROM otp_verifications WHERE email = ?", [email]);
+      res.json({ success: true, message: "OTP verified successfully" });
+    } else {
+      res.status(400).json({ error: "Invalid or expired OTP" });
+    }
+
+
+  } catch (error) {
+    console.error("OTP Verification Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.delete("/api/auth/logout", authMiddleware, async (req, res) => {
+
   await deleteSession(req.user.token);
   res.json({ ok: true });
 });
@@ -573,6 +706,90 @@ app.put("/api/profile/password", async (req, res) => {
   await query("UPDATE users SET password_hash = ? WHERE id = ?", [newHash, userRow.id]);
   res.json({ ok: true });
 });
+
+app.post("/api/auth/forgot-password/request", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required" });
+
+  const rows = await query("SELECT id FROM users WHERE email = ?", [email]);
+  if (!rows.length) {
+    return res.status(404).json({ error: "No account found with this email." });
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  try {
+    await query("DELETE FROM otp_verifications WHERE email = ?", [email]);
+    await query(
+      "INSERT INTO otp_verifications (email, otp, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))",
+      [email, otp]
+    );
+
+    const emailSent = await sendEmail({
+      to: email,
+      subject: "RupeeWise Password Reset Code",
+      text: `Your password reset code is ${otp}. It expires in 10 minutes.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #12CC82; text-align: center;">Reset Your Password</h2>
+          <p>Hello,</p>
+          <p>We received a request to reset your password. Use the following code to proceed:</p>
+          <div style="font-size: 32px; font-weight: bold; text-align: center; letter-spacing: 5px; margin: 20px 0; color: #333;">
+            ${otp}
+          </div>
+          <p style="color: #666; font-size: 14px;">This code will expire in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #999; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} RupeeWise. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    if (emailSent) {
+      res.json({ message: "Reset code sent successfully" });
+    } else {
+      res.status(500).json({ error: "Failed to send email." });
+    }
+  } catch (error) {
+    console.error("Forgot Password Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/auth/forgot-password/reset", async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ error: "Email, OTP, and new password are required" });
+  }
+
+  if (!validatePassword(newPassword)) {
+    return res.status(400).json({ error: "Password does not meet security requirements." });
+  }
+
+
+  try {
+    const rows = await query(
+      "SELECT id FROM otp_verifications WHERE email = ? AND otp = ? AND expires_at >= NOW() LIMIT 1",
+      [email, otp]
+    );
+
+    if (rows.length) {
+      const userRows = await query("SELECT id FROM users WHERE email = ? LIMIT 1", [email]);
+      if (!userRows.length) return res.status(404).json({ error: "User not found" });
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await query("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userRows[0].id]);
+      await query("DELETE FROM otp_verifications WHERE email = ?", [email]);
+      
+      res.json({ success: true, message: "Password reset successfully. You can now login." });
+    } else {
+      res.status(400).json({ error: "Invalid or expired OTP" });
+    }
+  } catch (error) {
+    console.error("Password Reset Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 
 app.delete("/api/profile", async (req, res) => {
   await query("DELETE FROM users WHERE id = ?", [req.user.userId]);
