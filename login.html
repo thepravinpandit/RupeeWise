@@ -51,11 +51,44 @@
           </span>
           <span class="show-password-text">Show password</span>
         </label>
-        <button class="primary auth-submit" type="submit">Sign in</button>
-        <p class="auth-footer">
+
+        <div class="auth-row">
+          <button type="button" id="forgot-password-link" class="link-btn">Forgot password?</button>
+        </div>
+
+
+        <button id="login-btn" class="primary auth-submit" type="submit">Sign in</button>
+
+        <!-- Forgot Password Flow -->
+        <div id="forgot-password-section" class="hidden">
+          <div id="reset-step-1">
+            <button type="button" id="send-reset-otp-btn" class="primary auth-submit">Send Reset Code</button>
+          </div>
+          
+          <div id="reset-step-2" class="hidden">
+            <div class="auth-field">
+              <label for="reset-otp">Verification Code</label>
+              <input id="reset-otp" class="auth-input" type="text" placeholder="6-digit code" maxlength="6" />
+            </div>
+            <div class="auth-field">
+              <label for="reset-new-password">New Password</label>
+              <input id="reset-new-password" class="auth-input" type="password" placeholder="Min 8 characters" minlength="8" />
+            </div>
+            <div class="auth-field">
+              <label for="reset-confirm-password">Confirm New Password</label>
+              <input id="reset-confirm-password" class="auth-input" type="password" placeholder="Re-enter password" minlength="8" />
+            </div>
+            <button type="button" id="reset-password-btn" class="primary auth-submit">Reset Password</button>
+          </div>
+
+          <button type="button" id="back-to-login-btn" class="link-btn" style="margin-top: 15px; width: 100%;">Back to Login</button>
+        </div>
+
+        <p class="auth-footer" id="login-footer">
           Don’t have an account?
           <a class="auth-link" href="register.html">Create one</a>
         </p>
+
       </form>
     </main>
 

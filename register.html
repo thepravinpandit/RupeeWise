@@ -78,7 +78,23 @@
           <span class="meter-bar" id="password-meter"></span>
           <span class="meter-label" id="password-meter-label">Use 12+ characters</span>
         </div>
-        <button class="primary auth-submit" type="submit">Register</button>
+        <div id="otp-section" class="hidden">
+          <div class="auth-field">
+            <label for="register-otp">Verification Code</label>
+            <input
+              id="register-otp"
+              class="auth-input"
+              type="text"
+              placeholder="Enter 6-digit OTP"
+              maxlength="6"
+              inputmode="numeric"
+            />
+            <p class="hint small">Check your email for a verification code.</p>
+          </div>
+        </div>
+        <button id="register-btn" class="primary auth-submit" type="submit">Register</button>
+        <button id="verify-btn" class="primary auth-submit hidden" type="button">Verify & Create Account</button>
+
         <p class="hint small">Long passphrases are encouraged. No special character rules.</p>
         <p class="auth-footer">
           Already have an account?
