@@ -10,8 +10,8 @@
 
 <body>
   <div class="app">
-    <button class="mobile-menu-button" id="mobile-menu-open" type="button" aria-controls="sidebar"
-      aria-expanded="false" aria-label="Open menu">
+    <button class="mobile-menu-button" id="mobile-menu-open" type="button" aria-controls="sidebar" aria-expanded="false"
+      aria-label="Open menu">
       <span class="tab-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" stroke-width="1.8">
           <path d="M4 7h16M4 12h16M4 17h16" />
@@ -743,10 +743,15 @@
               <span class="hint">Edit or remove entries anytime</span>
             </div>
             <div class="filters">
-              <input id="month-filter" type="month" />
-              <select id="category-filter"></select>
-              <input id="search-filter" type="search" placeholder="Search notes, tags, emoji" />
-              <select id="sort-filter">
+              <div class="filter-group">
+                <div class="month-picker-wrapper">
+                  <input id="month-filter" type="month" title="Filter by month" placeholder="Choose month" />
+                </div>
+                <button id="clear-filters" class="ghost small" type="button" title="Clear all filters">All time</button>
+              </div>
+              <select id="category-filter" title="Filter by category"></select>
+              <input id="search-filter" type="search" placeholder="Search notes, tags, emoji" title="Search expenses" />
+              <select id="sort-filter" title="Sort order">
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>
                 <option value="high">Highest amount</option>
@@ -755,7 +760,7 @@
             </div>
           </div>
           <div id="expense-list" class="expense-list scroll-list"></div>
-          <div id="empty-state" class="empty">No expenses for this month yet.</div>
+          <div id="empty-state" class="empty">No expenses found matching your criteria.</div>
         </section>
 
 
@@ -865,10 +870,6 @@
               <div class="insight-card">
                 <span class="label">Remaining income</span>
                 <strong id="income-remaining">₹0</strong>
-              </div>
-              <div class="insight-card">
-                <span class="label">Saving income</span>
-                <strong id="income-savings">₹0</strong>
               </div>
             </div>
             <div id="income-list" class="expense-list scroll-list"></div>
