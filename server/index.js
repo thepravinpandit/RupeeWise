@@ -226,6 +226,14 @@ const DEFAULT_PAYMENTS = [
   { type: "NetBanking", label: "NetBanking", detail: null, isDefault: 0 },
 ];
 
+const DEFAULT_INCOME_SOURCES = [
+  { name: "Salary", type: "Primary" },
+  { name: "Freelance", type: "Secondary" },
+  { name: "Business", type: "Business" },
+  { name: "Interest", type: "Passive" },
+  { name: "Gift", type: "Other" },
+];
+
 const seedDefaultsForUser = async (userId) => {
   let templates = await query(
     "SELECT label, color FROM category_templates ORDER BY id ASC"
@@ -257,6 +265,17 @@ const seedDefaultsForUser = async (userId) => {
   await pool.query(
     "INSERT INTO payment_methods (user_id, type, label, detail, is_default) VALUES ?",
     [paymentValues]
+  );
+
+  const incomeSourceValues = DEFAULT_INCOME_SOURCES.map((source) => [
+    userId,
+    source.name,
+    source.type,
+  ]);
+
+  await pool.query(
+    "INSERT INTO income_sources (user_id, name, type) VALUES ?",
+    [incomeSourceValues]
   );
 };
 

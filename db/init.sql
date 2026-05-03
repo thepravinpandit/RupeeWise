@@ -241,3 +241,14 @@ SELECT * FROM (
 ) AS defaults
 WHERE @test_user_id IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM payment_methods WHERE user_id = @test_user_id);
+
+INSERT INTO income_sources (user_id, name, type)
+SELECT * FROM (
+  SELECT @test_user_id, 'Salary', 'Primary' UNION ALL
+  SELECT @test_user_id, 'Freelance', 'Secondary' UNION ALL
+  SELECT @test_user_id, 'Business', 'Business' UNION ALL
+  SELECT @test_user_id, 'Interest', 'Passive' UNION ALL
+  SELECT @test_user_id, 'Gift', 'Other'
+) AS defaults
+WHERE @test_user_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM income_sources WHERE user_id = @test_user_id);

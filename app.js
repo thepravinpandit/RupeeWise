@@ -60,6 +60,7 @@ const elements = {
   categoryFilter: document.querySelector("#category-filter"),
   searchFilter: document.querySelector("#search-filter"),
   sortFilter: document.querySelector("#sort-filter"),
+  clearFilters: document.querySelector("#clear-filters"),
   demoButton: document.querySelector("#demo-data"),
   resetButton: document.querySelector("#reset-data"),
   exportCsv: document.querySelector("#export-csv"),
@@ -222,6 +223,13 @@ const syncBudgetMonth = () => {
   if (!elements.budgetMonth || !elements.monthFilter) return;
   if (elements.budgetMonth.value !== elements.monthFilter.value) {
     elements.budgetMonth.value = elements.monthFilter.value;
+  }
+};
+
+const updateMonthPickerUI = () => {
+  const wrapper = elements.monthFilter?.closest(".month-picker-wrapper");
+  if (wrapper) {
+    wrapper.classList.toggle("has-value", !!elements.monthFilter.value);
   }
 };
 
@@ -571,9 +579,8 @@ const loadBudgetLimit = async () => {
     state.budgetLimit = { limit: 5, used: 0, remaining: 5 };
   }
   if (elements.budgetLimitNote && state.budgetLimit) {
-    elements.budgetLimitNote.textContent = `You can edit your overall budget up to ${
-      state.budgetLimit.limit
-    } times per month. Remaining: ${state.budgetLimit.remaining}.`;
+    elements.budgetLimitNote.textContent = `You can edit your overall budget up to ${state.budgetLimit.limit
+      } times per month. Remaining: ${state.budgetLimit.remaining}.`;
   }
 };
 
@@ -739,8 +746,7 @@ const buildCategoryOptions = (selectedId) =>
   state.categories
     .map(
       (category) =>
-        `<option value="${category.id}" ${
-          category.id === selectedId ? "selected" : ""
+        `<option value="${category.id}" ${category.id === selectedId ? "selected" : ""
         }>${category.label}</option>`
     )
     .join("");
@@ -759,13 +765,12 @@ const buildPaymentOptions = (selectedId) => {
       ([type, methods]) => `
         <optgroup label="${type}">
           ${methods
-            .map(
-              (method) =>
-                `<option value="${method.id}" ${
-                  method.id === selectedId ? "selected" : ""
-                }>${getPaymentDisplay(method)}</option>`
-            )
-            .join("")}
+          .map(
+            (method) =>
+              `<option value="${method.id}" ${method.id === selectedId ? "selected" : ""
+              }>${getPaymentDisplay(method)}</option>`
+          )
+          .join("")}
         </optgroup>
       `
     )
@@ -810,20 +815,33 @@ const getFilteredParams = () => {
 };
 
 const updateSnapshot = async (filtered) => {
-  const monthValue = elements.monthFilter.value || defaultMonth;
-  const label = getMonthLabel(monthValue);
-  elements.snapshotRange.textContent = label ? `for ${label}` : "";
+  const monthValue = elements.monthFilter.value;
+  const label = monthValue ? getMonthLabel(monthValue) : "All Time";
+  elements.snapshotRange.textContent = `for ${label}`;
 
   const baseExpenses = state.allExpenses?.length ? state.allExpenses : filtered;
-  const monthExpenses = baseExpenses.filter((expense) =>
-    normalizeDateValue(expense.date).startsWith(monthValue)
-  );
-  const totalAll = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const targetExpenses = monthValue
+    ? baseExpenses.filter((expense) =>
+        normalizeDateValue(expense.date).startsWith(monthValue)
+      )
+    : baseExpenses;
 
-  const [year, month] = monthValue.split("-").map(Number);
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const avg = totalAll / daysInMonth;
-  const largest = monthExpenses.reduce((max, expense) => Math.max(max, expense.amount), 0);
+  const totalAll = targetExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+  let avg = 0;
+  if (monthValue) {
+    const [year, month] = monthValue.split("-").map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    avg = totalAll / daysInMonth;
+  } else if (targetExpenses.length) {
+    const dates = targetExpenses.map(e => new Date(normalizeDateValue(e.date)));
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date(Math.max(...dates));
+    const days = Math.max(1, Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1);
+    avg = totalAll / days;
+  }
+
+  const largest = targetExpenses.reduce((max, expense) => Math.max(max, expense.amount), 0);
 
   elements.totalSpent.textContent = formatCurrency(totalAll);
   elements.avgSpent.textContent = formatCurrency(avg);
@@ -1125,10 +1143,10 @@ const renderInsightLine = (expenses, now) => {
     </svg>
     <div class="line-labels">
       ${months
-        .map(
-          (month) => `<span class="bar-label">${month.label}</span>`
-        )
-        .join("")}
+      .map(
+        (month) => `<span class="bar-label">${month.label}</span>`
+      )
+      .join("")}
     </div>
   `;
 };
@@ -1156,8 +1174,7 @@ const renderInsightFeed = () => {
     const diff = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
     if (Math.abs(diff) >= 10) {
       insights.push(
-        `Overall spending is ${Math.abs(diff).toFixed(0)}% ${
-          diff >= 0 ? "higher" : "lower"
+        `Overall spending is ${Math.abs(diff).toFixed(0)}% ${diff >= 0 ? "higher" : "lower"
         } than last month.`
       );
     }
@@ -1179,8 +1196,7 @@ const renderInsightFeed = () => {
     .forEach((item) => {
       const category = getCategory(item.categoryId);
       insights.push(
-        `${category?.label || "Category"} spending is ${Math.abs(item.change).toFixed(0)}% ${
-          item.change >= 0 ? "higher" : "lower"
+        `${category?.label || "Category"} spending is ${Math.abs(item.change).toFixed(0)}% ${item.change >= 0 ? "higher" : "lower"
         } than last month.`
       );
     });
@@ -1343,16 +1359,16 @@ const renderList = (filtered) => {
 
   filtered.forEach((expense) => {
     const category = getCategory(expense.categoryId);
-  const paymentMethod = getPaymentById(expense.paymentMethodId);
-  const paymentLabel = paymentMethod ? getPaymentDisplay(paymentMethod) : "Payment";
+    const paymentMethod = getPaymentById(expense.paymentMethodId);
+    const paymentLabel = paymentMethod ? getPaymentDisplay(paymentMethod) : "Payment";
     const isCredit = isCreditCard(paymentMethod);
     const receiptUrl = toAssetUrl(expense.receiptUrl);
     const receiptName = expense.receiptName || "receipt";
     const tags = extractNoteTags(expense.note || "");
     const tagsMarkup = tags.length
       ? `<div class="note-tags">${tags
-          .map((tag) => `<span class="note-tag">${tag}</span>`)
-          .join("")}</div>`
+        .map((tag) => `<span class="note-tag">${tag}</span>`)
+        .join("")}</div>`
       : "";
     const receiptMarkup = receiptUrl
       ? `
@@ -1433,36 +1449,32 @@ const renderPaymentList = () => {
       const detail = method.detail || {};
       const upiInput =
         method.type === "UPI"
-          ? `<input class="method-input" data-field="upiId" type="text" placeholder="name@bank" value="${
-              detail.upiId || ""
-            }" />`
+          ? `<input class="method-input" data-field="upiId" type="text" placeholder="name@bank" value="${detail.upiId || ""
+          }" />`
           : "";
       const cardInputs =
         method.type === "Card"
           ? `
             <select class="method-input" data-field="cardType">
               ${["debit", "credit"]
-                .map(
-                  (type) =>
-                    `<option value="${type}" ${
-                      getCardType(method) === type ? "selected" : ""
-                    }>${type === "credit" ? "Credit card" : "Debit card"}</option>`
-                )
-                .join("")}
+            .map(
+              (type) =>
+                `<option value="${type}" ${getCardType(method) === type ? "selected" : ""
+                }>${type === "credit" ? "Credit card" : "Debit card"}</option>`
+            )
+            .join("")}
             </select>
             <select class="method-input" data-field="network">
               ${["Visa", "Mastercard", "RuPay", "Amex"]
-                .map(
-                  (network) =>
-                    `<option value="${network}" ${
-                      detail.network === network ? "selected" : ""
-                    }>${network}</option>`
-                )
-                .join("")}
+            .map(
+              (network) =>
+                `<option value="${network}" ${detail.network === network ? "selected" : ""
+                }>${network}</option>`
+            )
+            .join("")}
             </select>
-            <input class="method-input" data-field="last4" type="text" maxlength="4" placeholder="Last 4 digits" value="${
-              detail.last4 || ""
-            }" />
+            <input class="method-input" data-field="last4" type="text" maxlength="4" placeholder="Last 4 digits" value="${detail.last4 || ""
+          }" />
           `
           : "";
 
@@ -1518,9 +1530,8 @@ const renderCategoryList = () => {
         </span>
       </div>
       <div class="form-actions">
-        <button class="ghost" data-action="remove" data-id="${category.id}" ${
-          category.locked ? "disabled" : ""
-        }>
+        <button class="ghost" data-action="remove" data-id="${category.id}" ${category.locked ? "disabled" : ""
+      }>
           ${category.locked ? "Locked" : "Remove"}
         </button>
       </div>
@@ -1755,6 +1766,17 @@ const renderPersonalTouch = () => {
 const populateIncomeSources = () => {
   if (!elements.incomeSourceSelect) return;
   elements.incomeSourceSelect.innerHTML = "";
+  
+  if (!state.incomeSources.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No sources found - Add one in Settings";
+    option.disabled = true;
+    option.selected = true;
+    elements.incomeSourceSelect.appendChild(option);
+    return;
+  }
+
   state.incomeSources.forEach((source) => {
     const option = document.createElement("option");
     option.value = source.id;
@@ -1902,9 +1924,8 @@ const renderRecurringList = () => {
       item.innerHTML = `
         <div class="method-meta">
           <strong>${recurring.label} • ${formatCurrency(recurring.amount)}</strong>
-          <span class="badge-lite">Day ${recurring.dayOfMonth} • ${category?.label || "Category"} • ${
-        payment ? getPaymentDisplay(payment) : "Payment"
-      }</span>
+          <span class="badge-lite">Day ${recurring.dayOfMonth} • ${category?.label || "Category"} • ${payment ? getPaymentDisplay(payment) : "Payment"
+        }</span>
         </div>
         <div class="form-actions">
           <button class="ghost" data-action="edit" data-id="${recurring.id}">Edit</button>
@@ -1955,26 +1976,24 @@ const renderInvestments = () => {
               <span class="hint small">Fund type</span>
               <select data-field="fundType">
                 ${["Equity", "Debt", "Hybrid"]
-                  .map(
-                    (type) =>
-                      `<option value="${type}" ${
-                        fund.fundType === type ? "selected" : ""
-                      }>${type}</option>`
-                  )
-                  .join("")}
+            .map(
+              (type) =>
+                `<option value="${type}" ${fund.fundType === type ? "selected" : ""
+                }>${type}</option>`
+            )
+            .join("")}
               </select>
             </label>
             <label>
               <span class="hint small">Investment type</span>
               <select data-field="investmentType">
                 ${["SIP", "Lump Sum"]
-                  .map(
-                    (type) =>
-                      `<option value="${type}" ${
-                        fund.investmentType === type ? "selected" : ""
-                      }>${type}</option>`
-                  )
-                  .join("")}
+            .map(
+              (type) =>
+                `<option value="${type}" ${fund.investmentType === type ? "selected" : ""
+                }>${type}</option>`
+            )
+            .join("")}
               </select>
             </label>
             <label>
@@ -2002,15 +2021,13 @@ const renderInvestments = () => {
         item.innerHTML = `
           <div class="method-meta">
             <strong>${fund.fundName || "Mutual fund"}</strong>
-            <span class="badge-lite">${fund.fundType || "Fund"} • ${
-          fund.investmentType || "SIP"
-        }</span>
+            <span class="badge-lite">${fund.fundType || "Fund"} • ${fund.investmentType || "SIP"
+          }</span>
             <span class="hint small">Invested ${formatCurrency(
-              fund.amountInvested
-            )} • Current ${formatCurrency(fund.currentValue)}</span>
-            <span class="hint small">Date: ${
-              fund.investmentDate ? formatDate(fund.investmentDate) : "—"
-            }</span>
+            fund.amountInvested
+          )} • Current ${formatCurrency(fund.currentValue)}</span>
+            <span class="hint small">Date: ${fund.investmentDate ? formatDate(fund.investmentDate) : "—"
+          }</span>
           </div>
           <div class="form-actions">
             <span class="badge-lite">${formatPercent(returnPct)}</span>
@@ -2085,13 +2102,12 @@ const renderInvestments = () => {
         const pnl = current - invested;
         item.innerHTML = `
           <div class="method-meta">
-            <strong>${stock.stockName || "Stock"} ${
-          stock.stockTicker ? `(${stock.stockTicker})` : ""
-        }</strong>
+            <strong>${stock.stockName || "Stock"} ${stock.stockTicker ? `(${stock.stockTicker})` : ""
+          }</strong>
             <span class="badge-lite">${stock.quantity} shares • Avg ₹${stock.avgBuyPrice}</span>
             <span class="hint small">Invested ${formatCurrency(
-              invested
-            )} • Current ${formatCurrency(current)}</span>
+            invested
+          )} • Current ${formatCurrency(current)}</span>
           </div>
           <div class="form-actions">
             <span class="badge-lite">${formatCurrency(pnl)}</span>
@@ -2149,9 +2165,8 @@ const renderGoals = () => {
       item.innerHTML = `
         <div class="method-meta goal-meta">
           <strong>${goal.name || "Goal"}</strong>
-          <span class="hint small">Target ${formatCurrency(goal.targetAmount)} by ${
-        goal.targetDate ? formatDate(goal.targetDate) : "—"
-      }</span>
+          <span class="hint small">Target ${formatCurrency(goal.targetAmount)} by ${goal.targetDate ? formatDate(goal.targetDate) : "—"
+        }</span>
           <div class="goal-progress">
             <div class="goal-bar" style="width:${progress}%"></div>
           </div>
@@ -2246,22 +2261,22 @@ const handleInvestmentListClick = async (event) => {
     const payload =
       kind === "mutual_fund"
         ? {
-            kind,
-            fundName: values.fundName?.trim() || "",
-            fundType: values.fundType,
-            investmentType: values.investmentType,
-            amountInvested: Number(values.amountInvested || 0),
-            currentValue: Number(values.currentValue || 0),
-            investmentDate: values.investmentDate,
-          }
+          kind,
+          fundName: values.fundName?.trim() || "",
+          fundType: values.fundType,
+          investmentType: values.investmentType,
+          amountInvested: Number(values.amountInvested || 0),
+          currentValue: Number(values.currentValue || 0),
+          investmentDate: values.investmentDate,
+        }
         : {
-            kind,
-            stockName: values.stockName?.trim() || "",
-            stockTicker: values.stockTicker?.trim() || "",
-            quantity: Number(values.quantity || 0),
-            avgBuyPrice: Number(values.avgBuyPrice || 0),
-            currentPrice: Number(values.currentPrice || 0),
-          };
+          kind,
+          stockName: values.stockName?.trim() || "",
+          stockTicker: values.stockTicker?.trim() || "",
+          quantity: Number(values.quantity || 0),
+          avgBuyPrice: Number(values.avgBuyPrice || 0),
+          currentPrice: Number(values.currentPrice || 0),
+        };
     await fetchJSON(`${API_BASE}/investments/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -3283,6 +3298,7 @@ const handleTabClick = (event) => {
 
 const handleFiltersChange = async () => {
   if (!state.user) return;
+  updateMonthPickerUI();
   syncBudgetMonth();
   await loadBudget();
   await loadExpenses();
@@ -3481,7 +3497,7 @@ const handleAvatarUpload = async (event) => {
 
 const handleLogout = () => {
   if (state.token) {
-    fetchJSON(`${API_BASE}/auth/logout`, { method: "DELETE" }).catch(() => {});
+    fetchJSON(`${API_BASE}/auth/logout`, { method: "DELETE" }).catch(() => { });
   }
   clearAuth();
 };
@@ -3576,7 +3592,8 @@ const handleTogglePassword = (event) => {
 };
 
 const init = async () => {
-  elements.monthFilter.value = defaultMonth;
+  elements.monthFilter.value = ""; // Default to All Time
+  updateMonthPickerUI();
   elements.date.value = today.toISOString().slice(0, 10);
   if (elements.budgetMonth) elements.budgetMonth.value = defaultMonth;
   if (elements.aiMonth) elements.aiMonth.value = defaultMonth;
@@ -3754,6 +3771,15 @@ if (elements.aiMonth) elements.aiMonth.addEventListener("input", updateAiMeta);
 [elements.monthFilter, elements.categoryFilter, elements.searchFilter, elements.sortFilter].forEach(
   (input) => input.addEventListener("input", handleFiltersChange)
 );
+
+if (elements.clearFilters) {
+  elements.clearFilters.addEventListener("click", () => {
+    elements.monthFilter.value = "";
+    elements.categoryFilter.value = "all";
+    elements.searchFilter.value = "";
+    handleFiltersChange();
+  });
+}
 
 elements.quickAddButtons.forEach((button) => {
   button.addEventListener("click", () => {
