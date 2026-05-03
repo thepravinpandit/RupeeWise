@@ -144,7 +144,6 @@ const elements = {
   incomeMonthFilter: document.querySelector("#income-month-filter"),
   incomeTotal: document.querySelector("#income-total"),
   incomeRemaining: document.querySelector("#income-remaining"),
-  incomeSavings: document.querySelector("#income-savings"),
   fundForm: document.querySelector("#fund-form"),
   fundName: document.querySelector("#fund-name"),
   fundType: document.querySelector("#fund-type"),
@@ -245,6 +244,7 @@ let state = {
   recurringExpenses: [],
   incomeSources: [],
   incomeEntries: [],
+  allIncomeEntries: [],
   investments: [],
   goals: [],
   paymentMethods: [],
@@ -1834,26 +1834,18 @@ const renderIncomeSources = () => {
 const renderIncomeEntries = () => {
   if (!elements.incomeList) return;
   elements.incomeList.innerHTML = "";
-  const total = state.incomeEntries.reduce((sum, item) => sum + Number(item.amount), 0);
-  if (elements.incomeTotal) elements.incomeTotal.textContent = formatCurrency(total);
-  if (elements.incomeRemaining || elements.incomeSavings) {
-    const month = elements.incomeMonthFilter?.value || defaultMonth;
-    const spentTotal = (state.allExpenses || [])
-      .filter((expense) => normalizeDateValue(expense.date).startsWith(month))
-      .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-    const remaining = total - spentTotal;
-    const savingsBase = state.incomeBudget > 0 ? state.incomeBudget : spentTotal;
-    const savings = total - savingsBase;
-    if (elements.incomeRemaining) {
-      elements.incomeRemaining.textContent = formatCurrency(remaining);
-      elements.incomeRemaining.classList.toggle("negative", remaining < 0);
-      elements.incomeRemaining.classList.toggle("positive", remaining >= 0);
-    }
-    if (elements.incomeSavings) {
-      elements.incomeSavings.textContent = formatCurrency(savings);
-      elements.incomeSavings.classList.toggle("negative", savings < 0);
-      elements.incomeSavings.classList.toggle("positive", savings >= 0);
-    }
+  
+  // Lifetime Totals
+  const totalAllIncome = state.allIncomeEntries.reduce((sum, item) => sum + Number(item.amount), 0);
+  const totalAllExpenses = (state.allExpenses || []).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  
+  if (elements.incomeTotal) elements.incomeTotal.textContent = formatCurrency(totalAllIncome);
+  
+  if (elements.incomeRemaining) {
+    const remaining = totalAllIncome - totalAllExpenses;
+    elements.incomeRemaining.textContent = formatCurrency(remaining);
+    elements.incomeRemaining.classList.toggle("negative", remaining < 0);
+    elements.incomeRemaining.classList.toggle("positive", remaining >= 0);
   }
 
   if (!state.incomeEntries.length) {
@@ -2509,11 +2501,19 @@ const loadIncomeSources = async () => {
 
 const loadIncomeEntries = async () => {
   const month = elements.incomeMonthFilter?.value || defaultMonth;
-  const [data, budgetData] = await Promise.all([
+  const [data, allData, budgetData] = await Promise.all([
     fetchJSON(`${API_BASE}/income?month=${month}`),
+    fetchJSON(`${API_BASE}/income`),
     fetchJSON(`${API_BASE}/budget?month=${month}`),
   ]);
   state.incomeEntries = (data.items || []).map((item) => ({
+    ...item,
+    id: Number(item.id),
+    amount: Number(item.amount),
+    sourceId: Number(item.sourceId),
+    date: normalizeDateValue(item.date),
+  }));
+  state.allIncomeEntries = (allData.items || []).map((item) => ({
     ...item,
     id: Number(item.id),
     amount: Number(item.amount),
